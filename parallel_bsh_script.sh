@@ -18,5 +18,5 @@ echo "Running $SLURM_NTASKS tasks."
 echo "Current working directory is `pwd`"
 echo "My SLURM_ARRAY_TASK_ID: " $SLURM_ARRAY_TASK_ID
 /bin/hostname
-Rscript USA_UR_Deaths_LancetID.R $SLURM_ARRAY_TASK_ID
+Rscript _updated_model.R $SLURM_ARRAY_TASK_ID
 #srun -l $SLURM_ARRAY_TASK_ID

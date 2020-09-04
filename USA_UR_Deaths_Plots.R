@@ -31,11 +31,11 @@ totaldeaths_red <<- 0
 make_a_plot <- function(st){
   dd =  get_cfr_death_data(st)
   
-  posterior_z = fread(qq("/data/lancetid_actualdeaths_covid19/st_@{st}_posterior_z.dat"))
+  posterior_z = fread(qq("/data/actualdeaths_covid19/st_@{st}_posterior_z.dat"))
   mns1 = apply(posterior_z, 2, mean)
   
   
-  posterior_y = fread(qq("/data/lancetid_actualdeaths_covid19/st_@{st}_posterior_y.dat"))
+  posterior_y = fread(qq("/data/actualdeaths_covid19/st_@{st}_posterior_y.dat"))
   mns2 = apply(posterior_y, 2, mean)
   UR_N = length(mns1)
   
@@ -60,9 +60,6 @@ mplots = map(validstates, make_a_plot)
 #a_large_plot = ggpubr::ggarrange(plotlist = mplots, ncol=4)
 a_large_plot = cowplot::plot_grid(plotlist = mplots, ncol = 4)
 ggsave(filename = qq("all_states_lancetid.pdf"), plot=a_large_plot, width=12.5, height=20.5, units="in")
-
-
-fread("/data/cumulative_positive_cases_lancetid.csv")
 
 
 get_chad_request <- function(st, find_date){

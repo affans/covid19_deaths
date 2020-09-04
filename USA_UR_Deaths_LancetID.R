@@ -58,7 +58,7 @@ names(all_death_data) <- validstates
 names(all_cfr_data) <- validstates
 
 arg_st = validstates[as.numeric(args[1])]
-arg_st = "FL"
+arg_st = "NV"
 
 # ID ## ask mean = 0.2
 # ME
@@ -99,21 +99,20 @@ get_cfr_death_data <- function(st){
 
 cfr_data = get_cfr_death_data(arg_st)$cfr
 usethisdata = get_cfr_death_data(arg_st)$death
- 
-# if (arg_st == "WA"){
-#   usethisdata[which(usethisdata == 73)] = 9
-# }
 
 UR_N = length(usethisdata)
 qplot(x=1:UR_N, y=usethisdata, geom="line")
 qplot(x=1:UR_N, y=cfr_data, geom="line")
 
+# second wave thresholds
+# august 17 note: last day of data is july 31
+thresholds = rep(0, UR_N)
+thresholds[(UR_N - 60):UR_N] <- 1
+
 skewnormal <- nimbleFunction(
   run = function(x=double(0), xi=double(0, default=1), omega=double(0, default=1), 
                  alpha=double(0, default=0), tau=double(0, default=0), log=double(0, default=0)){
     returnType(double(0))
-    #x = x %% 91
-
     z <- (x-xi)/omega
     logN <- (-log(sqrt(2*pi)) -log(omega) - z^2/2)
     logS <- pnorm((alpha*z), log.p=TRUE)
@@ -124,7 +123,6 @@ skewnormal <- nimbleFunction(
   }
 )
 
-
 # define the model
 UR_code=nimbleCode({
   for(i in 1:n){
@@ -133,9 +131,10 @@ UR_code=nimbleCode({
     #pi[i] <- ilogit(skewnormal(x=i, locA, scaleA, shapeA) * 0.0178) ## okay results
     pi[i] <- ilogit(b0 + b1*u[i])
     
-    # mod for two waves
     #lambda[i] <- exp(p + log(skewnormal(x=i, loc, scale, shape)) + log(K))
-    lambda[i] <- exp(p + log(skewnormal(x=i, loc, scale, shape)) + log(K))
+    
+    # mod for two waves
+    lambda[i] <- exp(p + log(skewnormal(x=i, loc, scale, shape) + thresh[i]*skewnormal(x=i, loc2, scale2, shape2) ) + log(K))
     
     z[i] ~ dpois(lambda[i]*pi[i])
     #z[i] ~ dbin(prob = 1, size = y[i])
@@ -154,7 +153,10 @@ UR_code=nimbleCode({
   #shapesd ~ dnorm(mean=0.04587738, sd=0.04587738/10)
   shapesd ~ dnorm(mean=0.8587738, sd=0.04587738/10)
   shape ~ dnorm(0.006196017, sd=shapesd) #1] -0.1743705
-
+  
+  loc2 ~ dnorm(36.74267, sd=0.6688287)
+  scale2 ~ T(dnorm(9.238223, 0.1627184),0.001,)
+  shape2 ~ dnorm(0.006196017, sd=0.8587738) #1] -0.1743705
   # ID ## ask mean = 0.2
   # ME
   # ND
@@ -199,15 +201,15 @@ UR_code=nimbleCode({
 
 # Set up data for NIMBLE.
 popsize_state = popsizes[which(validstates==arg_st)]
-UR_constants=list(n=UR_N, K=popsize_state, u=cfr_data)
+UR_constants=list(n=UR_N, K=popsize_state, u=cfr_data, thresh=thresholds)
 UR_data=list(z=usethisdata)
 
 # Set initial values.
-UR_inits1=list(asd=0, locsd=0.6647207, shapesd=0.04561767, scalesd=0.1527172, b0 = 0, b1 = 0, p = 2, loc=0, shape=1, scale=0.5 )#gval=skewnormal(x=1:UR_N))
-UR_inits2=list(asd=0.2, locsd=0.6647207, shapesd=0.04561767, scalesd=0.1527172, b0 = 0, b1 = 0, p = 2.5, loc=0, shape=1, scale=1) #gval=skewnormal(x=1:UR_N))
-UR_inits3=list(asd=0.5, locsd=0.6647207, shapesd=0.04561767, scalesd=0.1527172, b0 = 0, b1 = 0, p = 2, loc=-1, shape=1, scale=0.1) #gval=skewnormal(x=1:UR_N))
-UR_inits4=list(asd=0, locsd=0.6647207, shapesd=0.04561767, scalesd=0.1527172, b0 = 0, b1 = 0, p = 1.4, loc=1, shape=1, scale=1.5) #gval=skewnormal(x=1:UR_N))
-UR_inits5=list(asd=0, locsd=0.6647207, shapesd=0.04561767, scalesd=0.1527172, b0 = 0, b1 = 0, p = 1.9, loc=1, shape=1, scale=2) #gval=skewnormal(x=1:UR_N))
+UR_inits1=list(asd=0, locsd=0.6647207, shapesd=0.04561767, scalesd=0.1527172, b0 = 0, b1 = 0, p = 2, loc=0, shape=1, scale=0.5, loc2=0, shape2=1, scale2=0.5)#gval=skewnormal(x=1:UR_N))
+UR_inits2=list(asd=0.2, locsd=0.6647207, shapesd=0.04561767, scalesd=0.1527172, b0 = 0, b1 = 0, p = 2.5, loc=0, shape=1, scale=1, loc2=0, shape2=1, scale2=0.5) #gval=skewnormal(x=1:UR_N))
+UR_inits3=list(asd=0.5, locsd=0.6647207, shapesd=0.04561767, scalesd=0.1527172, b0 = 0, b1 = 0, p = 2, loc=-1, shape=1, scale=0.1, loc2=-1, shape2=1, scale2=0.1) #gval=skewnormal(x=1:UR_N))
+UR_inits4=list(asd=0, locsd=0.6647207, shapesd=0.04561767, scalesd=0.1527172, b0 = 0, b1 = 0, p = 1.4, loc=1, shape=1, scale=1.5, loc2=1, shape2=1, scale2=1.5) #gval=skewnormal(x=1:UR_N))
+UR_inits5=list(asd=0, locsd=0.6647207, shapesd=0.04561767, scalesd=0.1527172, b0 = 0, b1 = 0, p = 1.9, loc=1, shape=1, scale=2, loc2=1, shape2=1, scale2=2) #gval=skewnormal(x=1:UR_N))
 
 UR_inits=list(chain1=UR_inits1, chain2=UR_inits2, chain3=UR_inits3, chain4=UR_inits4, chain5=UR_inits5)
 
@@ -285,6 +287,9 @@ if (writedata){
   print("writing data\n")
 }
 
+
+plot((1 - skewnormal(1:137, 25.74, 2.1, 0)) * (1 - cfr_data))
+plot((skewnormal(1:137, 25.74, 2.1, 0)) * 1/cfr_data)
 
 
 

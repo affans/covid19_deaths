@@ -1,21 +1,19 @@
 ## this is a helper file to USA_UR_Deaths_LancetID to create plots of the data
 ## MCMC analysis for estimating the true COVID-19 deaths 
-## See file USA_UR_Deaths_LancetID.R for details.
+## NOTE: THIS FILE REQUIRES main_model_run to be sourced. 
+## In particular, the function `get_state_data_vectors` and vector `validstates` are required
 
 ## Affan Shoukat
-library(ggplot2)
-library(ggpubr)
-library(tidyverse)
-library(data.table)
+library(tidyverse) # not on the cluster
 
-totaldeaths <<- 0 
-totaldeaths_red <<- 0 
+validstates = c("AK", "AL", "AR", "AZ", "CA", "CO", "CT", "DC", "DE", "FL", "GA", "HI", "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA", "MD", "ME", "MI", "MN", "MO", "MS", "MT", "NC", "ND", "NE", "NH", "NJ", "NM", "NV", "NY", "OH", "OK", "OR", "PA",  "RI", "SC", "SD", "TN", "TX", "UT", "VA", "VT", "WA", "WI", "WV", "WY")
+subfldr <- "results_sep14_d6b7865"
 
 make_a_plot <- function(st){
-  deathdata = get_cfr_death_data(st, ma=F)$death
+  deathdata = get_state_data_vectors(st, ma=F)$death
   
-  posterior_y = fread(qq("/data/actualdeaths_covid19/st_@{st}_00_posterior_y.dat"))
-  posterior_z = fread(qq("/data/actualdeaths_covid19/st_@{st}_00_posterior_z.dat"))
+  posterior_y = fread(qq("/data/actualdeaths_covid19/@{subfldr}/st_@{st}_00_posterior_y.dat"))
+  posterior_z = fread(qq("/data/actualdeaths_covid19/@{subfldr}/st_@{st}_00_posterior_z.dat"))
   mns1 = apply(posterior_y, 2, mean)
   mns2 = apply(posterior_z, 2, mean)
   
@@ -39,7 +37,6 @@ make_a_plot <- function(st){
   gg = gg + xlab("time") + ylab("deaths")
   gg
 }
-
 mplots = map(validstates, make_a_plot)
 #a_large_plot = ggpubr::ggarrange(plotlist = mplots, ncol=4)
 a_large_plot = cowplot::plot_grid(plotlist = mplots, ncol = 4)

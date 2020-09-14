@@ -34,6 +34,8 @@ library(nimble)
 library(coda) # For manipulation of MCMC results.
 library(mgcv)
 library(ggplot2)
+library(ggpubr)
+#library(tidyverse) # not on the cluster
 library(ggmcmc)
 #library(ggpubr)
 library(data.table)
@@ -47,8 +49,11 @@ library(qgam)  # for fitting
 library(zoo) 
 library(stringr)
 
+
 # write data files 
 WRITE_DATA = T
+
+# load data and functions ---------------------------------------------------------------
 
 # get state metadata
 city_metadata = fread("city_state_metadata.csv", colClasses = 'character')
@@ -147,7 +152,7 @@ fill_hospital_data <- function(hospdata, deathdata){
   # get the first non NA + 7 days of data, also get the death data
   na_indx = which(is.na(hospdata))
   if(length(na_indx) == 0){
-    return()
+    return(hospdata)
   }
   firstnonna = max(na_indx) + 1 
   f_hospdata =  hospdata[firstnonna:(firstnonna+7)]
@@ -225,7 +230,7 @@ bzvals = list("AK" = 10.5, "AL" = 2.6, "AR" = 2.3, "AZ" = 1.3, "CA" = 1.0, "CO" 
 # get command line argument for state
 args = commandArgs(trailingOnly=TRUE)
 arg_st = validstates[as.numeric(args[1])]
-#arg_st = "AK"
+arg_st = "AR"
 print(qq("Working with state: @{arg_st}"))
 
 bzvalue = as.numeric(bzvals[arg_st])
@@ -252,7 +257,7 @@ gg = gg + geom_line(aes(x=time, y=value))
 gg = gg + facet_wrap(facets=vars(variable), nrow = 2, ncol = 2, scales="free") 
 # labeller = as_labeller(c(A = "Currents (A)", V = "Voltage (V)") )
 gg = gg + ylab(NULL) + xlab("Time")
-ggsave(qq("dataplot_@{arg_st}.pdf"), plot = gg, width=6.54, height=3.96)
+ggsave(qq("/data/actualdeaths_covid19/dataplot_@{arg_st}.pdf"), plot = gg, width=6.54, height=3.96)
 
 length(deathdata) == length(deathdata_ma) 
 length(deathdata) == length(poly_tim)

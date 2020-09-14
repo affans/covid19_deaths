@@ -1,5 +1,7 @@
 ## MCMC analysis for estimating the true COVID-19 deaths 
-## See file USA_UR_Deaths_LancetID.R for details.
+## Downloaded files here are used by Seyed/Ellie to generate CFR and UR incidence. 
+## The file hosp_data.csv is not sent to Seyed, but still used in the Bayesian model
+
 rm(list=ls())
 library(data.table)
 library(tidyverse)
@@ -14,10 +16,10 @@ make_incidence <- function(cum_data){
   return(incidence)
 }
 mydat <- fread('https://covidtracking.com/api/v1/states/daily.csv')
-mydat <- mydat[, c(1:4, 17)] # col 17 is death
+mydat <- mydat[, c(1:4, 6, 17)] # col 17 is death
 mydat <- mydat %>% mutate(total = positive + negative)
 
-validstates = c("AL", "AK", "AZ" ,"AR" ,"CA" ,"CO" ,"CT" ,"DE" ,"DC" ,"FL" ,"GA" , "HI", "ID" ,"IL" ,"IN" ,"IA" ,"KS" ,"KY" ,"LA" ,"ME" ,"MD" ,"MA" ,"MI" ,"MN" ,"MS" ,"MO" ,"MT" ,"NE" ,"NV" ,"NH" ,"NJ" ,"NM" ,"NY" ,"NC" ,"ND" ,"OH" ,"OK" ,"OR" ,"PA" ,"RI" ,"SC" ,"SD" ,"TN" ,"TX" ,"UT" ,"VT" ,"VA" ,"WA" ,"WV" ,"WI" ,"WY")
+validstates = c("AK", "AL", "AR", "AZ", "CA", "CO", "CT", "DC", "DE", "FL", "GA", "HI", "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA", "MD", "ME", "MI", "MN", "MO", "MS", "MT", "NC", "ND", "NE", "NH", "NJ", "NM", "NV", "NY", "OH", "OK", "OR", "PA",  "RI", "SC", "SD", "TN", "TX", "UT", "VA", "VT", "WA", "WI", "WV", "WY")
 mydat <- mydat %>% filter(state %in% validstates)
 length(unique(mydat$state))
 
@@ -55,15 +57,19 @@ death_df_incidence = death_df %>%
 # add the date column back
 death_df_incidence = cbind(date=death_df$date, death_df_incidence)
 
-
-#dcast(mydat, date ~ state, value.var = "total")
-
-# write the files. 
-fwrite(total_df, "/data/cumulative_total_tests_lancetid.csv")
-fwrite(positive_df, "/data/cumulative_positive_cases_lancetid.csv")
-fwrite(death_df, "/data/cumulative_deaths_lancetid.csv")
+hosp_df = mydat %>% pivot_wider(id_cols = "date", names_from = state, values_from = hospitalizedCurrently) %>% data.table
 
 # write the files. 
-fwrite(total_df_incidence, "/data/incidence_total_tests_lancetid.csv")
-fwrite(positive_df_incidence, "/data/incidence_positive_cases_lancetid.csv")
-fwrite(death_df_incidence, "/data/incidence_deaths_lancetid.csv")
+fwrite(total_df, "/data/actualdeaths_covid19/downloaded_data/cumulative_total_tests_lancetid.csv")
+fwrite(positive_df, "/data/actualdeaths_covid19/downloaded_data/cumulative_positive_cases_lancetid.csv")
+fwrite(death_df, "/data/actualdeaths_covid19/downloaded_data/cumulative_deaths_lancetid.csv")
+fwrite(hosp_df, "/data/actualdeaths_covid19/downloaded_data/hosp_data.csv")
+#fwrite(hosp_df, "~/actual_covid19_deaths/hosp_data.csv")
+
+# write the files. 
+fwrite(total_df_incidence, "/data/actualdeaths_covid19/downloaded_data/incidence_total_tests_lancetid.csv")
+fwrite(positive_df_incidence, "/data/actualdeaths_covid19/downloaded_data/incidence_positive_cases_lancetid.csv")
+fwrite(death_df_incidence, "/data/actualdeaths_covid19/downloaded_data/incidence_deaths_lancetid.csv")
+
+
+

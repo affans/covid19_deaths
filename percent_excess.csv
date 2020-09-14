@@ -1,0 +1,44 @@
+state,percent_val,statepop,city,citypop,factfindstate,abbr,code2
+Alabama,0.107947805456702,4887871,Birmingham,"209,880",Alabama,AL,01
+Arkansas,0.114595210946408,3013825,Little Rock,"197,881",Arkansas,AR,05
+Arizona,0.166310206176747,7171646,Phoenix,"1,660,272",Arizona,AZ,04
+California,0.0822985768554743,39557045,Los Angeles,"3,990,456",California,CA,06
+Colorado,0.116275250451634,5695564,Denver,"716,492",Colorado,CO,08
+Connecticut,0.12962962962963,3572665,Bridgeport,"144,900",Connecticut,CT,09
+District of Columbia,0.286264441591784,702455,Washington,"702,455",District of Columbia,DC,11
+Delaware,0.226282051282051,967171,Wilmington,"70,635",Delaware,DE,10
+Florida,0.107713451297028,21299325,Jacksonville,"903,889",Florida,FL,12
+Hawaii,0.161157024793388,1420491,Honolulu1,"347,397",Hawaii,HI,15
+Iowa,0.123827392120075,3156145,Des Moines,"216,853",Iowa,IA,19
+Idaho,0.127147766323024,1754208,Boise,"228,790",Idaho,ID,16
+Illinois,0.109680655408795,12741080,Chicago,"2,705,994",Illinois,IL,17
+Indiana,0.0811827956989247,6691878,Indianapolis,"867,125",Indiana,IN,18
+Kansas,0.127310061601643,2911505,Wichita,"389,225",Kansas,KS,20
+Kentucky,0.14123006833713,4468402,Louisville,"620,118",Kentucky,KY,21
+Louisiana,0.135662063363119,4659978,New Orleans,"391,006",Louisiana,LA,22
+Massachusetts,0.142712208319242,6902149,Boston,"694,583",Massachusetts,MA,25
+Maryland,0.132237871674491,6042718,Baltimore,"602,495",Maryland,MD,24
+Michigan,0.141294562477494,9995915,Detroit,"672,662",Michigan,MI,26
+Missouri,0.083028083028083,6126452,Kansas City,"491,918",Missouri,MO,29
+Mississippi,0.142925890279115,2986530,Jackson,"164,422",Mississippi,MS,28
+Montana,0.194736842105263,1062305,Billings,"109,550",Montana,MT,30
+North Carolina,0.0754405286343612,10383620,Charlotte,"872,498",North Carolina,NC,37
+North Dakota,0.213793103448276,760077,Fargo,"124,844",North Dakota,ND,38
+Nebraska,0.138263665594855,1929268,Omaha,"468,262",Nebraska,NE,31
+New Hampshire,0.197339246119734,1356458,Manchester,"112,525",New Hampshire,NH,33
+New Jersey,0.350435624394966,8908520,Newark,"282,090",New Jersey,NJ,34
+New Mexico,0.16609977324263,2095428,Albuquerque,"560,218",New Mexico,NM,35
+Nevada,0.128934010152284,3034392,Las Vegas,"644,644",Nevada,NV,32
+New York,0.241340668296659,19542209,New York City,"8,398,748",New York,NY,36
+Ohio,0.0671601175574181,11689442,Columbus,"892,533",Ohio,OH,39
+Oklahoma,0.159559834938102,3943079,Oklahoma City,"649,021",Oklahoma,OK,40
+Oregon,0.0954478707782673,4190713,Portland,"653,115",Oregon,OR,41
+Pennsylvania,0.108532630725578,12807060,Philadelphia,"1,584,138",Pennsylvania,PA,42
+Rhode Island,0.177156177156177,1057315,Providence,"179,335",Rhode Island,RI,44
+South Carolina,0.123887318043774,5084127,Charleston,"136,208",South Carolina,SC,45
+Tennessee,0.0839335180055402,6770010,Nashville,"669,053",Tennessee,TN,47
+Utah,0.130434782608696,3161105,Salt Lake City,"200,591",Utah,UT,49
+Virginia,0.0978800180423996,8517685,Virginia Beach,"450,189",Virginia,VA,51
+Vermont,0.287015945330296,626299,Burlington,"42,899",Vermont,VT,50
+West Virginia,0.14446227929374,1805832,Charleston,"47,215",West Virginia,WV,54
+Wyoming,0.358885017421603,577737,Cheyenne,"63,957",Wyoming,WY,56

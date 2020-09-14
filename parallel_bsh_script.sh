@@ -9,7 +9,6 @@
 
 #below this line is where we can place our commands, in this case it will just simply output the task ID of the array
 # the array=1-51 command tells slurm to launch 51 INDEEPENDENT JOBS.  
-# 
 
 echo "Starting at `date`"
 echo "Running on hosts: $SLURM_NODELIST"

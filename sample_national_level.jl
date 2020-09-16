@@ -16,12 +16,28 @@ using Random
 
 const to = TimerOutput()
 
+function create_UST_files()
+    ## function in progress, not completed yet 
+    ## to do: run for all states, and do comparison check from Seyed's UST file
+    # how many time points? To check this, look at the number of rows of all_death_data in the R main file. 
+    timepoints = 230     
+    fn = "/data/actualdeaths_covid19/st_NY_00_posterior_y.dat"
+    df = CSV.File(fn, header=true) |> DataFrame!    
+    n_zero_cols = timepoints - size(df)[2]
+    new_df = DataFrame([Int64 for i = 1:n_zero_cols], [Symbol("c$i") for i = 1:n_zero_cols], 12000)
+    new_df .= 0    
+    newdf = hcat(new_df, df)
+    println("new: $(size(newdf))")
+    newdf
+
+end
+
 function read_df()
     #vector of states 
     validstates = ("AK", "AL", "AR", "AZ", "CA", "CO", "CT", "DC", "DE", "FL", "GA", "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA", "MD", "ME", "MI", "MN", "MO", "MS", "MT", "NC", "ND", "NE", "NH", "NJ", "NM", "NV", "NY", "OH", "OK", "OR", "PA",  "RI", "SC", "SD", "TN", "TX", "UT", "VA", "VT", "WA", "WI", "WV", "WY")
     df_of_states = Array{DataFrame, 1}(undef, 50)
     for (i, vs) in enumerate(validstates)
-        fn = "/data/actualdeaths_covid19/UST_$(vs)_posterior_z.csv"
+        fn = "/data/actualdeaths_covid19/UST_$(vs)_posterior_z.csv"        
         df_of_states[i] = CSV.File(fn, header=false) |> DataFrame
     end 
     return df_of_states
@@ -50,8 +66,7 @@ function process_national()
     reset_timer!(to)
     dfs = @timeit to "read df" convert(Array{Matrix{Float64}, 1}, read_df())
     pdat = @timeit to "write file" _sample_for_national(dfs)
-    writedlm("/data/actualdeaths_covid19/national_z.dat", pdat)
-    return 1
+    writedlm("/data/actualdeaths_covid19/national_z.dat", pdat)    
 end
 
 

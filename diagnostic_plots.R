@@ -1,4 +1,7 @@
-## diagnostic plots 
+## MCMC analysis for estimating the true COVID-19 deaths 
+## Affan Shoukat 2020
+## scratch file: not really used for the main analysis. 
+
 rm(list = ls())
 library(ggplot2)
 library(ggmcmc)
@@ -11,20 +14,7 @@ library(gridExtra)
 library(GetoptLong)
 library(stringr)
 
-## read excess deaths from CDC data 
-## cdc file "excess_deaths.csv" downloaded on September 9th, 2020
-excess <- fread("excess_deaths.csv", select = c("Week Ending Date", "Year", "State", "Type", "Outcome", "Exceeds Threshold", "Observed Number", "Average Expected Count", "Percent Excess Lower Estimate", "Percent Excess Higher Estimate"))
-names(excess) <- c("week", "year", "state", "type", "outcome", "thresh", "observed", "expected", "percent_lo", "percent_hi")
-excess$week = as.Date(excess$week)
-excess = excess %>% arrange(week)
 
-ef = excess %>% filter(year == 2020 & outcome == "All causes, excluding COVID-19" & 
-                         thresh==T & week < "2020-07-30")
-
-pmeans = ef %>% group_by(state) %>% 
-          summarise(percent_val = (sum(observed) - sum(expected))/sum(expected))
-
-pmeans = pmeans %>% left_join(city_metadata, by="state")
 #pmeans <- pmeans %>% filter(abbr %in% levels(df$arg_st))
 ## delete columns not needed
 #pmeans = pmeans %>%

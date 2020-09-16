@@ -1,13 +1,14 @@
-## this is a helper file to USA_UR_Deaths_LancetID to create plots of the data
 ## MCMC analysis for estimating the true COVID-19 deaths 
+## Affan Shoukat 2020
+
+## creates a ggplot for the posterior y/z results.
 ## NOTE: THIS FILE REQUIRES main_model_run to be sourced. 
 ## In particular, the function `get_state_data_vectors` and vector `validstates` are required
 
-## Affan Shoukat
 library(tidyverse) # not on the cluster
 
 validstates = c("AK", "AL", "AR", "AZ", "CA", "CO", "CT", "DC", "DE", "FL", "GA", "HI", "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA", "MD", "ME", "MI", "MN", "MO", "MS", "MT", "NC", "ND", "NE", "NH", "NJ", "NM", "NV", "NY", "OH", "OK", "OR", "PA",  "RI", "SC", "SD", "TN", "TX", "UT", "VA", "VT", "WA", "WI", "WV", "WY")
-subfldr <- "results_sep14_d6b7865"
+subfldr <- ""
 
 make_a_plot <- function(st){
   deathdata = get_state_data_vectors(st, ma=F)$death

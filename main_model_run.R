@@ -50,10 +50,10 @@ library(zoo)
 library(stringr)
 
 
-# write data files 
-WRITE_DATA = T
 
-# load data and functions ---------------------------------------------------------------
+# load data, constants, and functions ---------------------------------------------------------------
+
+WRITE_DATA = T # write data files at the end
 
 # get state metadata
 city_metadata = fread("city_state_metadata.csv", colClasses = 'character')
@@ -197,6 +197,24 @@ minmax <- function(dat, a, b){
   a + (dat - min(dat))*(b-a) / (max(dat) - min(dat))
 }
 
+# function to read excess deaths from CDC data 
+read_cdc_excess_death_data <- function(){
+  # cdc file "excess_deaths.csv" downloaded on September 9th, 2020
+  excess <- fread("excess_deaths.csv", select = c("Week Ending Date", "Year", "State", "Type", "Outcome", "Exceeds Threshold", "Observed Number", "Average Expected Count", "Percent Excess Lower Estimate", "Percent Excess Higher Estimate"))
+  names(excess) <- c("week", "year", "state", "type", "outcome", "thresh", "observed", "expected", "percent_lo", "percent_hi")
+  excess$week = as.Date(excess$week)
+  excess = excess %>% arrange(week)
+  ef = excess %>% filter(year == 2020 & outcome == "All causes, excluding COVID-19" & 
+                           thresh==T & week < "2020-07-30")
+  
+  pmeans = ef %>% group_by(state) %>% 
+    summarise(percent_val = (sum(observed) - sum(expected))/sum(expected))
+  pmeans = pmeans %>% left_join(city_metadata, by="state")
+  
+}
+
+
+
 # model def and implementation ---------------------------------------------------------------
 
 # define the model in NIMBLE
@@ -206,7 +224,7 @@ lmod_code = nimbleCode({
     lambda[i] <- a0 + log(K) + a1*deaths[i]
     y[i] ~ dpois(lambda[i]) 
     ## out of true counts, binomial thinning
-    pi[i] <- ilogit(b0 + b1*x1[i] + b2*x2[i])
+    pi[i] <- ilogit(b0 + b1*x1[i] + b2*x2[i] + b3*x3[i])
     z[i] ~ dbin(prob = pi[i], size = y[i])
   }
   a0 ~ dnorm(0, sd=log(K)) 
@@ -214,23 +232,24 @@ lmod_code = nimbleCode({
   b0 ~ dnorm(bzval, sd = 0.1) 
   b1 ~ dnorm(0, sd = 10)
   b2 ~ dnorm(0, sd = 10)
+  b3 ~ dnorm(0, sd = 10) 
 })
 
 # estimated mean values for b0 in the MCMC model. 
 # these values are estimated using CDC excess deaths. 
-bzvals = list("AK" = 10.5, "AL" = 2.6, "AR" = 2.3, "AZ" = 1.3, "CA" = 1.0, "CO" = 2.0, "CT" = 0.8, "DC" = 1.5, "DE" = 0.8, 
-              "FL" = 1.5, "HI" = 10.5, "IA" = 2.2, "ID" = 2.5, "IL" = 1.8, "IN" = 2.1, "KS" = 1.8, "KY" = 2.0, "LA" = 1.8,
-              "MA" = 0.8, "MD" = 1.0, "ME" = 10.5,  "MI" = 1.5, "MN" = 4.5,  "MO" = 1.4, "MS" = -1.0, "MT" = 4.5, 
-              "NC" = 2.1, "ND" = 3.5, "NE" = 2.1, "NH" = 1.8, "SD" = 10.5,
-              "NJ" = 0.1, "NM" = 2.0, "NV" = 1.6, "NY" = 1.0, "OH" = 2.2, "OK" = 2.5, "OR" = 3.5, "PA" = 2.7,
-              "RI" = 1.0, "SC" = 1.9, "TN" = 2.3, "UT" = 3.5, "VA" = 3.4, "VT" = 3.5, 
-              "WA" = 10.5, "WI" = 10.5,  "WV" = 3.5, "WY" = 4.5, 
-              "TX" = 1.9, "GA" = 2.0)
+bzvals = list("AK" = 10.5, "AL" = 1.4, "AR" = 1.4, "AZ" = 0.6, "CA" = 0.5, "CO" = 1.5, "CT" = 1.1, "DC" = 0.8, "DE" = 1.4, 
+              "FL" = 0.4, "HI" = 10.5, "IA" = 0.8, "ID" = 1.5, "IL" = 1.0, "IN" = 1.8, "KS" = 1.2, "KY" = 0.8, "LA" = 0.2,
+              "MA" = 0.2, "MD" = 0.2, "ME" = 10.5,  "MI" = 0.5, "MN" = 1.5,  "MO" = 1.2, "MS" = -1.0, "MT" = 2.5, 
+              "NC" = 1.5, "ND" = 1.5, "NE" = 0.2, "NH" = 0.9, "SD" = 10.5,
+              "NJ" = 0.1, "NM" = 0.2, "NV" = 0.4, "NY" = 0.9, "OH" = 1.5, "OK" = 0.7, "OR" = 1.5, "PA" = 2.5,
+              "RI" = 0.5, "SC" = 0.4, "TN" = 1.0, "UT" = 0.8, "VA" = 1.2, "VT" = 3.5, 
+              "WA" = 1.8, "WI" = 1.5,  "WV" = 1.0, "WY" = 4.5, 
+              "TX" = 0.2, "GA" = 1.2)
 
 # get command line argument for state
 args = commandArgs(trailingOnly=TRUE)
 arg_st = validstates[as.numeric(args[1])]
-arg_st = "AR"
+#arg_st = "WA" 
 print(qq("Working with state: @{arg_st}"))
 
 bzvalue = as.numeric(bzvals[arg_st])
@@ -243,7 +262,7 @@ deathdata_ma = get_state_data_vectors(arg_st, ma=T)$death
 urcases = get_state_data_vectors(arg_st, ma=T)$urcases
 tstdata = get_state_data_vectors(arg_st, ma=T)$tstdata
 hospdata = get_state_data_vectors(arg_st, ma=T)$hospdata
-hospdata = fill_hospital_data(hospdata, deathdata)
+hospdata = fill_hospital_data(hospdata, deathdata) 
 
 #fit the data (fit to rolling avg to smooth out, seyed's idea)
 poly_tim = fitlmn(deathdata_ma, 0.5)$fitted.values
@@ -257,31 +276,35 @@ gg = gg + geom_line(aes(x=time, y=value))
 gg = gg + facet_wrap(facets=vars(variable), nrow = 2, ncol = 2, scales="free") 
 # labeller = as_labeller(c(A = "Currents (A)", V = "Voltage (V)") )
 gg = gg + ylab(NULL) + xlab("Time")
-ggsave(qq("/data/actualdeaths_covid19/dataplot_@{arg_st}.pdf"), plot = gg, width=6.54, height=3.96)
-
-length(deathdata) == length(deathdata_ma) 
-length(deathdata) == length(poly_tim)
+gg
+if (WRITE_DATA){
+  ggsave(qq("/data/actualdeaths_covid19/dataplot_@{arg_st}.pdf"), plot = gg, width=6.54, height=3.96)  
+}
 
 # x1: proportion of people dead out of total infected (basically cfr, but with timing issue)
 prop_death = deathdata_ma / urcases
 
-# x2: interpret: risk of death
+# x2: interpret: estimated cases that were tested
 risk_death = urcases / tstdata 
 
+# x3: death divided by hosp - proportion of deaths that were hospitalized
+# the ratio of death to hospitalized cases. informing to some degree the proportion of under reporting
+risk_hosp = deathdata_ma / hospdata
+
 # Set initial values.
-inits1=list(a0=0, a1=1, b0 = 0, b1 = 7.5, b2=8.5,y=deathdata)
-inits2=list(a0=0, a1=1, b0 = 0, b1 = 8, b2=8, y=deathdata)
-inits3=list(a0=0, a1=1, b0 = 0, b1 = 8.5, b2=7.5, y=deathdata)
+inits1=list(a0=0, a1=1, b0 = 0, b1 = 7.5, b2=8.5, b3=1, y=deathdata)
+inits2=list(a0=0, a1=1, b0 = 0, b1 = 8, b2=8, b3=1, y=deathdata)
+inits3=list(a0=0, a1=1, b0 = 0, b1 = 8.5, b2=7.5, b3=1, y=deathdata)
 inits=list(chain1=inits1, chain2=inits2, chain3=inits3)
 
 # load the constants and data
-lmod_constants = list(n = nobs, K=popsize, deaths=poly_tim, x1=risk_death, x2=prop_death, bzval=bzvalue)
+lmod_constants = list(n = nobs, K=popsize, deaths=poly_tim, x1=risk_death, x2=prop_death, x3=risk_hosp, bzval=bzvalue)
 lmod_data = list(z = deathdata)
 
 #Build the model.
 model <- nimbleModel(lmod_code, lmod_constants, lmod_data, inits)
 compiled_model <- compileNimble(model, resetFunctions = TRUE)
-mcmc_conf <- configureMCMC(compiled_model, monitors=c("lambda", "pi", "a0", "a1", "b0", "b1", "b2"), print=T)
+mcmc_conf <- configureMCMC(compiled_model, monitors=c("lambda", "pi", "a0", "a1", "b0", "b1", "b2", "b3"), print=T)
 mcmc <- buildMCMC(mcmc_conf)
 compiled_mcmc <- compileNimble(mcmc, project = model)
 
@@ -340,6 +363,7 @@ plot(df$a1)
 plot(df$b0)
 plot(df$b1)
 plot(df$b2)
+plot(df$b3)
 plot(apply(posterior_pi, 2, mean))
 
 gg = ggplot()

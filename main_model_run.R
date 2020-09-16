@@ -49,12 +49,7 @@ library(qgam)  # for fitting
 library(zoo) 
 library(stringr)
 
-
-
 # load data, constants, and functions ---------------------------------------------------------------
-
-WRITE_DATA = T # write data files at the end
-
 # get state metadata
 city_metadata = fread("city_state_metadata.csv", colClasses = 'character')
 city_metadata$statepop = as.numeric(gsub(",", "", city_metadata$statepop)) # turn to numeric
@@ -66,8 +61,8 @@ validstates = c("AK", "AL", "AR", "AZ", "CA", "CO", "CT", "DC", "DE", "FL", "GA"
 all_death_data = fread("Death.csv")
 all_test_data = fread("Test.csv")
 # for test data: flip as its in descending order and remove the date column
-all_test_data = all_test_data %>% mutate(sortk = seq(nrow(all_test_data), 1)) %>% arrange(sortk)
-all_test_data[, sortk := NULL]
+# all_test_data = all_test_data %>% mutate(sortk = seq(nrow(all_test_data), 1)) %>% arrange(sortk)
+# all_test_data[, sortk := NULL]
 ur_case_data = fread("./meanINC.csv")
 # ur_case_data = as.data.table(lapply(ur_case_data, cumsum)) # turn columns into cumulative
 
@@ -212,6 +207,7 @@ read_cdc_excess_death_data <- function(){
   pmeans = pmeans %>% left_join(city_metadata, by="state")
   
 }
+fmeans = read_cdc_excess_death_data()
 
 
 
@@ -235,21 +231,23 @@ lmod_code = nimbleCode({
   b3 ~ dnorm(0, sd = 10) 
 })
 
-# estimated mean values for b0 in the MCMC model. 
-# these values are estimated using CDC excess deaths. 
-bzvals = list("AK" = 10.5, "AL" = 1.4, "AR" = 1.4, "AZ" = 0.6, "CA" = 0.5, "CO" = 1.5, "CT" = 1.1, "DC" = 0.8, "DE" = 1.4, 
-              "FL" = 0.4, "HI" = 10.5, "IA" = 0.8, "ID" = 1.5, "IL" = 1.0, "IN" = 1.8, "KS" = 1.2, "KY" = 0.8, "LA" = 0.2,
-              "MA" = 0.2, "MD" = 0.2, "ME" = 10.5,  "MI" = 0.5, "MN" = 1.5,  "MO" = 1.2, "MS" = -1.0, "MT" = 2.5, 
-              "NC" = 1.5, "ND" = 1.5, "NE" = 0.2, "NH" = 0.9, "SD" = 10.5,
-              "NJ" = 0.1, "NM" = 0.2, "NV" = 0.4, "NY" = 0.9, "OH" = 1.5, "OK" = 0.7, "OR" = 1.5, "PA" = 2.5,
-              "RI" = 0.5, "SC" = 0.4, "TN" = 1.0, "UT" = 0.8, "VA" = 1.2, "VT" = 3.5, 
-              "WA" = 1.8, "WI" = 1.5,  "WV" = 1.0, "WY" = 4.5, 
-              "TX" = 0.2, "GA" = 1.2)
+# informative mean values for b0 in the MCMC model. 
+# these values are estimated using CDC excess deaths.
+# see function read_cdc_excess_death_data()
+bzvals = list("AK" = 10.5, "AL" = 2.0, "AR" = 3.2, "AZ" = 1.5, "CA" = 2.4, "CO" = 1.6, "CT" = 1.5, "DC" = 1.6, "DE" = 1.3, 
+              "FL" = 1.6, "HI" = 10.5, "IA" = 1.8, "ID" = 2.1, "IL" = 1.6, "IN" = 2.2, "KS" = 1.8, "KY" = 1.8, "LA" = 1.4,
+              "MA" = 1.2, "MD" = 1.0, "ME" = 10.5,  "MI" = 1.0, "MN" = 1.5,  "MO" = 2.5, "MS" = 1.5, "MT" = 4.0, 
+              "NC" = 2.3, "ND" = 2.2, "NE" = 2.0, "NH" = 1.3, "SD" = 10.5,
+              "NJ" = 0.85, "NM" = 1.8, "NV" = 1.6, "NY" = 1.1, "OH" = 2.0, "OK" = 2.0, "OR" = 2.7, "PA" = 3.5,
+              "RI" = 1.0, "SC" = 1.5, "TN" = 2.5, "UT" = 3.5, "VA" = 2.2, "VT" = 3.8, 
+              "WA" = 2.2, "WI" = 3.5,  "WV" = 2.3, "WY" = 4.4, 
+              "TX" = 2.0, "GA" = 1.9)
 
 # get command line argument for state
 args = commandArgs(trailingOnly=TRUE)
 arg_st = validstates[as.numeric(args[1])]
-#arg_st = "WA" 
+arg_st = "NJ" 
+WRITE_DATA = T # write data files at the end
 print(qq("Working with state: @{arg_st}"))
 
 bzvalue = as.numeric(bzvals[arg_st])
@@ -354,8 +352,9 @@ c_pinc = round((c_mns1 - c_data)/c_data, 2)
 c_finc = round((c_mns1 - sum(poly_tim))/sum(poly_tim), 2)
 
 c_binc = round((c_mns1 - c_mns2)/c_mns2, 2)
+cdc_pexcess = round(as.numeric(fmeans %>% filter(abbr == arg_st) %>% select("percent_val") ), 2)
 xvals = length(deathdata)
-c_Str = qq(" st: @{arg_st}, data: @{c_data}, true: @{c_mns1}, obs: @{c_mns2}, %inc (data): @{c_pinc}, %inc (blue): @{c_binc}, %inc (green): @{c_finc}")
+c_Str = qq(" st: @{arg_st}, data: @{c_data}, true: @{c_mns1}, obs: @{c_mns2}, %inc (data): @{c_pinc}, %inc (blue): @{c_binc}, cdc: @{cdc_pexcess}")
 print(c_Str)
 
 plot(df$a0)

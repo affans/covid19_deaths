@@ -7,9 +7,6 @@
 ## creates a table file (that can be further processed in Excel) of the results
 ## -- mean, lo, and high CI 
 ## -- uses functions create_table() and create_table_states()
-## creates a file for national level results 
-## -- uses the national_y/z file to calculate means, lo, and high
-## -- uses functions get_national_statistics()
 
 ## NOTE: source main_model_run.R to bring in functions and data. 
 ## In particular, the function `get_state_data_vectors` and vector `validstates` are required
@@ -57,7 +54,6 @@ create_all_plots <- function(){
   ggsave(filename = qq("all_states_lancetid.pdf"), plot=a_large_plot, width=15.5, height=30.5, units="in")
 }
 
-
 ## next two functions looks at the posterior_y/posterior_z files and 
 ## creates a table of results (mean values + HDI intervals)
 create_table <- function(st){
@@ -84,41 +80,3 @@ create_table_states <- function(){
   fwrite(aa, "table_results.csv")
 }
 
-## next two functions looks at the UST posterior_y/posterior_z files and 
-## prints out the results for the national. it also creates national_processed_y/z files 
-## for Seyed's plotting. 
-get_national_statistics <- function(df){
-  time_means = apply(df, 1, mean)
-  time_ci = apply(df, 1, ci, method="HDI", ci=0.95)
-  #extract the lows and highs
-  lows = unlist(lapply(time_ci, function(x) x[[2]]))
-  highs = unlist(lapply(time_ci, function(x) x[[3]]))
-  stopifnot(length(lows) == nrow(df))
-  stopifnot(length(highs) == nrow(df))
-  
-  # print statistic for table: 
-  csum = sum(time_means)
-  clows = sum(lows)
-  chighs = sum(highs)
-  cstr = qq("cumulative sum: @{csum}, low: @{clows}, @{chighs}")
-  print(cstr); print("\n")
-  national_processed = data.table(time = 1:nrow(df), means = time_means, 
-                                  lows = lows, highs=highs)
-  gg = ggplot(national_processed) 
-  gg = gg + geom_line(aes(x=time, y=means))
-  gg = gg + geom_ribbon(aes(x = time, ymin=lows, ymax=highs))
-  return(national_processed)
-}
-
-process_national <- function(){
-  ## gets the CI for national level. 
-  ## move to julia after
-  nat_y = fread("/data/actualdeaths_covid19/national_y.dat",sep = "\t", header = F)
-  nat_z = fread("/data/actualdeaths_covid19/national_z.dat",sep = "\t", header = F)
-  
-  ydf = get_national_statistics(nat_y)
-  zdf = get_national_statistics(nat_z)
-  
-  fwrite(ydf, "/data/actualdeaths_covid19/national_processed_y.csv")
-  fwrite(zdf, "/data/actualdeaths_covid19/national_processed_z.csv")
-}

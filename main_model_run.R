@@ -15,20 +15,15 @@
 ##   - Creates posterior_y, posterior_z data files for y, z (true, observed) for each state in the /data folder. 
 ##.  - Creates dataplot_{state}.pdf files to visualize the input raw data
 ##   - Use the file create_plots.R to plot these output files in a panel.
-##
+##.  - Use the julia script "sample_national_level.jl" to get process data at the national level
+
 ## How to run: 
 ##   - Set the arg_st variable to a valid state acronym (ie from `validstates`)
-##   - automation 
+##   - automation if cluster with slurm
 ##   --- parallel_bsh_script will submit jobs to cluster ~ 5 - 8 minutes for all states
 ##   --- remember to sbatch the parallel script. running it as a bash script will error out.
-##   --- note the caveat. After all states have finished running, manually run the 7 states that require a different prior and overwrite the results
 ## 
-## What happens after?
-##   - the posterior files are sent to Seyed who uses a matlab script to make the time "uniform"
-##   - that is.. pad the posterior data tables with 0 columns until there are 1 to 141 columns in all files
-##   - I have code for this too (see at the end)... So might be worth it to just uncomment the code and use the parallel/script script without sending to Seyed
-##   - Once Seyed (or my script) pads the data tables, 
-##   - use my Julia script to calculate national level. 
+
 rm(list = ls())
 library(nimble)
 library(coda) # For manipulation of MCMC results.
@@ -56,7 +51,7 @@ city_metadata$statepop = as.numeric(gsub(",", "", city_metadata$statepop)) # tur
 
 # state order in meanCFR,Death, and other files from Seyed 
 validstates = c("AK", "AL", "AR", "AZ", "CA", "CO", "CT", "DC", "DE", "FL", "GA", "HI", "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA", "MD", "ME", "MI", "MN", "MO", "MS", "MT", "NC", "ND", "NE", "NH", "NJ", "NM", "NV", "NY", "OH", "OK", "OR", "PA",  "RI", "SC", "SD", "TN", "TX", "UT", "VA", "VT", "WA", "WI", "WV", "WY")
-
+          
 # load all the data
 all_death_data = fread("Death.csv")
 all_test_data = fread("Test.csv")

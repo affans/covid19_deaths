@@ -42,8 +42,8 @@ function create_all_USTs()
         new_df .= 0    
         newdf_y = hcat(new_df, df_y)
         newdf_z = hcat(new_df, df_z)
-        # turn off headers as that was the case from Seyeds file and 
-        # the rest of the code is header=false when reading the files
+        # In Seyeds file the headers are off
+        # but this script sets the headers by default.         
         CSV.write("/data/actualdeaths_covid19/UST_af_$(vs)_posterior_y.csv", newdf_y)
         CSV.write("/data/actualdeaths_covid19/UST_af_$(vs)_posterior_z.csv", newdf_z)        
     end
@@ -70,10 +70,10 @@ end
 # end
 
 function read_UST(y_or_z) 
-    df_of_states = Array{DataFrame, 1}(undef, 50)
+    df_of_states = Array{DataFrame, 1}(undef, length(list_of_states))
     for (i, vs) in enumerate(list_of_states)
-        fn = "/data/actualdeaths_covid19/UST_$(vs)_posterior_$(y_or_z).csv"        
-        df_of_states[i] = CSV.File(fn, header=false) |> DataFrame
+        fn = "/data/actualdeaths_covid19/UST_af_$(vs)_posterior_$(y_or_z).csv"        
+        df_of_states[i] = CSV.File(fn, header=true) |> DataFrame
     end 
     return df_of_states
 end

@@ -18,7 +18,7 @@ library(bayestestR)
 make_a_plot <- function(st){
   deathdata = get_state_data_vectors(st, ma=F)$death
   
-  posterior_y = fread(qq("/data/actualdeaths_covid19/@{subfldr}/st_@{st}_00_posterior_y.dat"))
+  posterior_y = fread(qq("/data/actualdeaths_covid19/st_@{st}_00_posterior_y.dat"))
   posterior_z = fread(qq("/data/actualdeaths_covid19/st_@{st}_00_posterior_z.dat"))
   mns1 = apply(posterior_y, 2, mean)
   mns2 = apply(posterior_z, 2, mean)
@@ -61,7 +61,7 @@ create_table <- function(st){
   deathdata = get_state_data_vectors(st, ma=F)$death
   csum = sum(deathdata)
   
-  posterior_y = fread(qq("/data/actualdeaths_covid19/@{subfldr}/st_@{st}_00_posterior_y.dat"))
+  posterior_y = fread(qq("/data/actualdeaths_covid19/st_@{st}_00_posterior_y.dat"))
   samp_sums = apply(posterior_y, 1, sum)
   posty = round(mean(samp_sums))
   cred_int = ci(samp_sums, method = "HDI",ci = 0.95)

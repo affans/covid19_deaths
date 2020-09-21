@@ -204,7 +204,53 @@ read_cdc_excess_death_data <- function(){
 }
 fmeans = read_cdc_excess_death_data()
 
+get_normalized_deaths <- function(st){
+  cumdeaths = sum(get_state_data_vectors(st, ma=F)$death)
+  popsize = (city_metadata %>% filter(abbr == st))$statepop
+  rt = cumdeaths / popsize * 100000 # normalize to population 
+  rt = log(rt) # take the log 
+  return(rt)
+}
 
+# old values for b0, informed using cdc but not really used in the model 
+bzvals = list("AK" = 10.5, "AL" = 2.0, "AR" = 3.2, "AZ" = 1.5, "CA" = 2.4, "CO" = 1.6, "CT" = 1.5, "DC" = 1.6, "DE" = 1.3, 
+              "FL" = 1.6, "HI" = 10.5, "IA" = 1.8, "ID" = 2.1, "IL" = 1.6, "IN" = 2.2, "KS" = 1.8, "KY" = 1.8, "LA" = 1.4,
+              "MA" = 1.2, "MD" = 1.0, "ME" = 10.5,  "MI" = 1.0, "MN" = 1.5,  "MO" = 2.5, "MS" = 1.5, "MT" = 4.0, "NC" = 2.3, "ND" = 2.2, 
+              "NE" = 2.0, "NH" = 1.3, "SD" = 10.5, "NJ" = 0.85, "NM" = 1.8, "NV" = 1.6, "NY" = 1.1, "OH" = 2.0, "OK" = 2.0, "OR" = 2.7, "PA" = 3.5,
+              "RI" = 1.0, "SC" = 1.5, "TN" = 2.5, "UT" = 3.5, "VA" = 2.2, "VT" = 3.8, "WA" = 2.2, "WI" = 3.5,  "WV" = 2.3, "WY" = 4.4, "TX" = 2.0, "GA" = 1.9)
+# convert the bzvals into a table for joining purposes 
+l_tib <- data.table(bzvals %>% unlist(recursive = FALSE) %>% tibble::enframe())
+names(l_tib) = c("abbr", "bzval")
+
+# get normalized deaths for each state 
+st_norm_deaths <- unlist(purrr::map(validstates, get_normalized_deaths))
+st_norm_deaths <- data.table(states=as.factor(validstates), logdeaths=st_norm_deaths)
+# join the old cdc values for comparison purposes 
+st_norm_deaths <- st_norm_deaths %>% left_join(l_tib, by = c("states" = "abbr"))
+#st_norm_deaths <- st_norm_deaths %>% mutate(meanval=mean(logdeaths))
+st_norm_deaths <- st_norm_deaths %>% mutate(redblue_diff = abs(bzval - logdeaths)/2)
+#seyed_dt <- seyed_dt %>% mutate(diffdis = dat - linept) %>% mutate(newpt = linept - diffdis)
+
+# we need to adjust the logdeaths values to calibrate the model. 
+# the model should be calibrated so that NY gives the reported underreporting ~30%
+correction_factor = (1.88 + 1.1) # where 1.88 is the diff between NY bzval and CDC excess death.
+st_norm_deaths <- st_norm_deaths %>% mutate(newbz = 2*correction_factor - logdeaths)
+
+
+#smm <- melt(st_norm_deaths, id.vars = "states", measure.vars = c("logdeaths", "newbz"))
+gg <- ggplot(st_norm_deaths)
+colors <- c("logdeaths" = "red", "cdc_estim" = "blue", "corrected" = "orange")
+gg <- gg + geom_point(aes(x=states, y=logdeaths, color="logdeaths"), alpha=0.5)
+gg <- gg + geom_line(aes(x=states, y=logdeaths, group=1, color="logdeaths"), alpha=0.2)
+gg <- gg + geom_point(aes(x=states, y=bzval, color="cdc_estim"))
+gg <- gg + geom_line(aes(x=states, y=bzval, group=1, color="cdc_estim"), linetype = "dashed", alpha = 0.8)
+gg <- gg + geom_point(aes(x=states, y=newbz,  color="corrected"))
+gg <- gg + geom_line(aes(x=states, y=newbz, group=1,  color="corrected"))
+gg <- gg + scale_color_manual(values=colors)
+gg <- gg + ylim(c(0, 6.0))
+gg <- gg + geom_hline(aes(yintercept=correction_factor))
+#ggsave(filename = "bzero_informed_values.pdf", plot = gg, height = 7, width=16)
+gg
 
 # model def and implementation ---------------------------------------------------------------
 
@@ -229,23 +275,16 @@ lmod_code = nimbleCode({
 # informative mean values for b0 in the MCMC model. 
 # these values are estimated using CDC excess deaths.
 # see function read_cdc_excess_death_data()
-bzvals = list("AK" = 10.5, "AL" = 2.0, "AR" = 3.2, "AZ" = 1.5, "CA" = 2.4, "CO" = 1.6, "CT" = 1.5, "DC" = 1.6, "DE" = 1.3, 
-              "FL" = 1.6, "HI" = 10.5, "IA" = 1.8, "ID" = 2.1, "IL" = 1.6, "IN" = 2.2, "KS" = 1.8, "KY" = 1.8, "LA" = 1.4,
-              "MA" = 1.2, "MD" = 1.0, "ME" = 10.5,  "MI" = 1.0, "MN" = 1.5,  "MO" = 2.5, "MS" = 1.5, "MT" = 4.0, 
-              "NC" = 2.3, "ND" = 2.2, "NE" = 2.0, "NH" = 1.3, "SD" = 10.5,
-              "NJ" = 0.85, "NM" = 1.8, "NV" = 1.6, "NY" = 1.1, "OH" = 2.0, "OK" = 2.0, "OR" = 2.7, "PA" = 3.5,
-              "RI" = 1.0, "SC" = 1.5, "TN" = 2.5, "UT" = 3.5, "VA" = 2.2, "VT" = 3.8, 
-              "WA" = 2.2, "WI" = 3.5,  "WV" = 2.3, "WY" = 4.4, 
-              "TX" = 2.0, "GA" = 1.9)
 
 # get command line argument for state
 args = commandArgs(trailingOnly=TRUE)
 arg_st = validstates[as.numeric(args[1])]
-arg_st = "NJ" 
+#arg_st = "IA" 
 WRITE_DATA = T # write data files at the end
 print(qq("Working with state: @{arg_st}"))
 
-bzvalue = as.numeric(bzvals[arg_st])
+bzvalue = st_norm_deaths %>% filter(states == arg_st) %>% select(newbz) %>% .$newbz
+print(qq("bzval: @{bzvalue}"))
 popsize = (city_metadata %>% filter(abbr == arg_st))$statepop
   
 deathdata = get_state_data_vectors(arg_st, ma=F)$death

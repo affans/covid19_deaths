@@ -7,8 +7,9 @@
 ##    - this function then uses the UST files to generate national_z and national_y files 
 ## 3) run national_statistics() to get means/cred intervals of these national_z / national_y files
 ##    - creates a single file called "antional_processed_zy.csv"
-## and samples the empirical distribution to get the national level results. 
-## the results are stored in files "national_y, national_z.csv" 
+##    - and samples the empirical distribution to get the national level results. 
+##    - the results are stored in files "national_y, national_z.csv" 
+## to do: create function: pipeline() that runs the three functions at the same time
 
 using Distributed
 using Base.Filesystem
@@ -144,7 +145,8 @@ function national_statistics()
     # this code was used to check whether the julia code produces same as R code
     # checkdf = CSV.File("/data/actualdeaths_covid19/national_processed_zy.csv") |> DataFrame!
     # sum.(eachcol(checkdf)) .≈ sum.(eachcol(proc))
-    CSV.write("/data/actualdeaths_covid19/national_processed_zy.csv", proc)
+    # save the processed results in home directory
+    CSV.write("national_processed_zy.csv", proc)
 end
 
 function create_national_plot()     
@@ -167,9 +169,8 @@ function create_national_plot()
     # add the z curve on the plot 
     @gp :- xvals est.means_z "with lines title 'Fitted curve to data' lc 'black'"
     @gp :- xvals est.raw "with linespoints title 'Reported Deaths' lc 'black' pt 8"
-    #@gp :- xvals est.raw "with lines notitle lc 'black'"
-    save(term="svg enhanced standalone mouse size 1600,400", output="output.svg")
+    @gp :- xvals est.raw "with lines notitle lc 'black'"
+    save(term="svg enhanced standalone mouse size 1600,400", output="Figure_national.svg")
     #save(term="pngcairo", output="ex1.png")
     #save(term="pngcairo size 550,350 fontscale 0.8", output="assets/output.png")        
 end
-

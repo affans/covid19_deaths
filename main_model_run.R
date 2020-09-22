@@ -236,6 +236,9 @@ st_norm_deaths <- st_norm_deaths %>% mutate(redblue_diff = abs(bzval - logdeaths
 correction_factor = (1.88 + 1.1) # where 1.88 is the diff between NY bzval and CDC excess death.
 st_norm_deaths <- st_norm_deaths %>% mutate(newbz = 2*correction_factor - logdeaths)
 
+# have to manually adjust PA as the logdeaths produces a very nonrealistic number
+# we pick 3.5 as that gets us to the maximum of excess deaths reported by CDC
+st_norm_deaths <- st_norm_deaths %>% mutate(newbz=replace(newbz, states=="PA", 3.5))
 
 #smm <- melt(st_norm_deaths, id.vars = "states", measure.vars = c("logdeaths", "newbz"))
 gg <- ggplot(st_norm_deaths)

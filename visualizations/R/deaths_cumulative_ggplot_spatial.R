@@ -1,7 +1,7 @@
 # death cumulative line plot ---- 
 
 load("output_data/states_geom_and_data.RData")
-library(tidyverse)
+library(tidyverse); library(sf)
 
 per_pop <- 1e3
 
@@ -164,3 +164,4 @@ for(date_ind in 1:length(unique(states_and_geom_estimate$date))){
 
   print(date_ind)
 }
+

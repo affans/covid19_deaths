@@ -77,18 +77,6 @@ names(all_test_data) <- validstates
 names(ur_case_data) <- validstates
 
 ## define global functions
-skewnormal <- nimbleFunction(
-  run = function(x=double(0), xi=double(0, default=1), omega=double(0, default=1), 
-                 alpha=double(0, default=0), tau=double(0, default=0), log=double(0, default=0)){
-    returnType(double(0))
-    z <- (x-xi)/omega
-    logN <- (-log(sqrt(2*pi)) -log(omega) - z^2/2)
-    logS <- pnorm((alpha*z), log.p=TRUE)
-    logPDF <- as.numeric(logN + logS - pnorm(tau, log.p=TRUE))
-    if(log) return(logPDF) else return(exp(logPDF))
-  }
-)
-
 fitlmn <- function(dat, qu_val){
   # qgam paper: Statistical distribution fitting to the number of COVID-19 deaths in South Africa
   # follows the code samples from that paper -- can be optimized and cleaned up
@@ -120,7 +108,7 @@ get_state_data_vectors <- function(st, ma=F){
   
   firstnonzero = min( which ( ddd != 0 )) 
   lastelement = length(ddd)
-  
+ # 2, 3
   if(ma){
     death_rm = rollmean(ddd[(firstnonzero-2): lastelement], 3)
     urc_rm = rollmean(urc[(firstnonzero-2) : lastelement], 3)
@@ -152,15 +140,14 @@ fill_hospital_data <- function(hospdata, deathdata){
   #f_ratio = f_deathdata / f_hospdata
   f_ratio =  f_hospdata / f_urcases
 
-  # get trhe mean of the ratios
+  # get the mean of the ratios
   f_mean = mean(f_ratio)
   if (f_mean < 0.0005) 
-    f_mean = 1 
+    f_mean = 1  # for model stability
   
   # use the death data to estimate the hospitalized for the NA part 
   #estimated_hosp = deathdata[na_indx] / f_mean 
   estimated_hosp = urcases[na_indx] * f_mean
-  
   
   # the slight problem here is if the deaths = 0, this makes hospitalized = 0 
   # so solution to this would be to take a moving average (which still may not solve the problem)
@@ -168,13 +155,6 @@ fill_hospital_data <- function(hospdata, deathdata){
   # either way, append to the hospital data first 
   hospdata[na_indx] <- estimated_hosp
   hospdata <- rollapply(hospdata, width = length(na_indx), FUN = mean, align = "center", partial = TRUE)
-  
-  #simpler solution, for any 0.. find the first non-zero on the left of the data 
-  # since the deathdata is always >0 at day 1, this should always work 
-  # zero_indx = which(hospdata[na_indx] == 0)
-  # for (i in zero_indx){
-  #   hospdata[i] = hospdata[i - 1]
-  # }
   
   plot(x=(firstnonna+1):length(hospdata), y=hospdata[(firstnonna+1):length(hospdata)], 
        xlab="time", ylab="prevalence hosp", xlim=c(1, length(hospdata)), ylim=c(0, max(hospdata)))
@@ -252,7 +232,6 @@ gg <- gg + geom_line(aes(x=states, y=newbz, group=1,  color="corrected"))
 gg <- gg + scale_color_manual(values=colors)
 gg <- gg + ylim(c(0, 6.0))
 gg <- gg + geom_hline(aes(yintercept=correction_factor))
-#ggsave(filename = "bzero_informed_values.pdf", plot = gg, height = 7, width=16)
 gg
 
 # model def and implementation ---------------------------------------------------------------
@@ -268,7 +247,7 @@ lmod_code = nimbleCode({
     z[i] ~ dbin(prob = pi[i], size = y[i])
   }
   a0 ~ dnorm(0, sd=log(K)) 
-  a1 ~ T(dnorm(10, sd=1), 1,) 
+  a1 ~ T(dnorm(a1mean, sd=a1sd), 1,)  #10, 1
   b0 ~ dnorm(bzval, sd = 0.1) 
   b1 ~ dnorm(0, sd = 10)
   b2 ~ dnorm(0, sd = 10)
@@ -282,7 +261,7 @@ lmod_code = nimbleCode({
 # get command line argument for state
 args = commandArgs(trailingOnly=TRUE)
 arg_st = validstates[as.numeric(args[1])]
-#arg_st = "IA" 
+#arg_st = "HI" 
 WRITE_DATA = T # write data files at the end
 print(qq("Working with state: @{arg_st}"))
 
@@ -301,6 +280,7 @@ hospdata = fill_hospital_data(hospdata, deathdata)
 
 #fit the data (fit to rolling avg to smooth out, seyed's idea)
 poly_tim = fitlmn(deathdata_ma, 0.5)$fitted.values
+#poly_tim[which(deathdata == 0)] <- 0 
 poly_tim[poly_tim < 0] = 1e-5 # for model stability
 
 ## plot the data to review later 
@@ -326,6 +306,19 @@ risk_death = urcases / tstdata
 # the ratio of death to hospitalized cases. informing to some degree the proportion of under reporting
 risk_hosp = deathdata_ma / hospdata
 
+# mean and sd of the parameter a1 in the model 
+# for most states this is relatively uninformative 
+# for WY, HI, AK, VT, make the mean/sd tighter
+# this is because bad fitting as lots of zeros
+if (arg_st %in% c("WY", "HI", "AK", "VT")){
+  a1mean = 0
+  a1sd = 0.1
+} else {
+  a1mean = 10 
+  a1sd = 1
+}
+print("a1mean: @{a1mean}, a1sd: @{a1sd}")
+
 # Set initial values.
 inits1=list(a0=0, a1=1, b0 = 0, b1 = 7.5, b2=8.5, b3=1, y=deathdata)
 inits2=list(a0=0, a1=1, b0 = 0, b1 = 8, b2=8, b3=1, y=deathdata)
@@ -333,7 +326,7 @@ inits3=list(a0=0, a1=1, b0 = 0, b1 = 8.5, b2=7.5, b3=1, y=deathdata)
 inits=list(chain1=inits1, chain2=inits2, chain3=inits3)
 
 # load the constants and data
-lmod_constants = list(n = nobs, K=popsize, deaths=poly_tim, x1=risk_death, x2=prop_death, x3=risk_hosp, bzval=bzvalue)
+lmod_constants = list(n = nobs, K=popsize, deaths=poly_tim, x1=risk_death, x2=prop_death, x3=risk_hosp, bzval=bzvalue, a1mean=a1mean, a1sd=a1sd)
 lmod_data = list(z = deathdata)
 
 #Build the model.

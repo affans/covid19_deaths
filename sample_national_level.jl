@@ -80,18 +80,32 @@ function read_UST(y_or_z)
 end
 
 # fast preallocated
+# function _sample_for_national(mydat)
+#     cols = size(mydat[1])[2] ## get the number of columns for any matrix - this represents the time span of the analysis.
+#     full_df = zeros(Float64, cols, 12000)  # time x samples
+#     for simi = 1:12000        
+#         for st = 1:50 
+#             sl_df = mydat[st]
+#             for t = 1:cols
+#                 sl_df_t = @view sl_df[:, t] 
+#                 r_val = rand(sl_df_t)
+#                 full_df[t, simi] += r_val
+#             end
+#         end   
+#     end
+#     return full_df
+# end
+
 function _sample_for_national(mydat)
     cols = size(mydat[1])[2] ## get the number of columns for any matrix - this represents the time span of the analysis.
     full_df = zeros(Float64, cols, 12000)  # time x samples
-    for simi = 1:12000        
-        for st = 1:50 
-            sl_df = mydat[st]
-            for t = 1:cols
-                sl_df_t = @view sl_df[:, t] 
-                r_val = rand(sl_df_t)
-                full_df[t, simi] += r_val
-            end
-        end   
+
+    for st = 1:length(mydat)
+        sl_df = mydat[st]
+        for t = 1:cols             
+            reps = @view sl_df[:, t]
+            full_df[t, :] += reps
+        end
     end
     return full_df
 end
@@ -146,7 +160,7 @@ function national_statistics()
     # checkdf = CSV.File("/data/actualdeaths_covid19/national_processed_zy.csv") |> DataFrame!
     # sum.(eachcol(checkdf)) .≈ sum.(eachcol(proc))
     # save the processed results in home directory
-    CSV.write("national_processed_zy.csv", proc)
+    CSV.write("/data/actualdeaths_covid19/national_processed_zy.csv", proc)
 end
 
 function create_national_plot()     
@@ -161,6 +175,9 @@ function create_national_plot()
     @gp :- "set xlabel 'Time (2020)'" "set ylabel 'Death Count"
     @gp :- "set key title 'Legend'"
     @gp :- "set key top left Left reverse samplen 1" ## ???
+    @gp :- "set label 'cumulative mean sum: $(round(sum(est.means_y)))' at  graph 0.7, 0.9"
+    @gp :- "set label 'cumulative lo sum: $(round(sum(est.lows_y)))' at  graph 0.7, 0.85"
+    @gp :- "set label 'cumulative hi sum: $(round(sum(est.highs_y)))' at  graph 0.7, 0.80"
     #@gp :- "set xtics 1"
     @gp :- raw"""set xtics ('Mar 1' 39, 'Apr 1' 70, 'May 1' 100, 'Jun 1' 131, 'Jul 1' 161, 'Aug 1' 192, 'Sep 1' 223)"""
     @gp :- xvals est.lows_y est.highs_y "with filledcu notitle lw 2 lc rgb '#a1d99b' "
@@ -173,4 +190,34 @@ function create_national_plot()
     save(term="svg enhanced standalone mouse size 1600,400", output="Figure_national.svg")
     #save(term="pngcairo", output="ex1.png")
     #save(term="pngcairo size 550,350 fontscale 0.8", output="assets/output.png")        
+end
+
+function create_trace_plot(st)
+    ## creates a trace plot for each state. 
+    est = CSV.File("/data/actualdeaths_covid19/st_NY_00_traceplots.dat", header=true) |> DataFrame!    
+    xvals = 1:nrow(est)
+
+    @gp "set grid" "set key left"
+    @gp :- "unset colorbox"
+    @gp :- "set xlabel 'iteration'" "set ylabel 'parameter value"
+    
+    @gp :- "set size 1600, 1480"
+    @gp :- "set multiplot layout 5,1 rowsfirst margins 0.05,0.95,0.1,0.9 spacing 0.05,0.02" #l r b t
+    
+    params = [:a0, :a1, :b0, :b1, :b2]
+    for (i, n) in enumerate(params)
+        @gp :- xvals est[!, n] "with lines '$n' lw 0.1 lc 'black' " :- 
+    end
+    #est
+    return 2
+
+    #@gp :- "set key title 'Legend'"
+    #@gp :- "set key top left Left reverse samplen 1" ## ???
+    #@gp :- "set label 'cumulative mean sum: $(round(sum(est.means_y)))' at  graph 0.7, 0.9"
+    #@gp :- "set label 'cumulative lo sum: $(round(sum(est.lows_y)))' at  graph 0.7, 0.85"
+    #@gp :- "set label 'cumulative hi sum: $(round(sum(est.highs_y)))' at  graph 0.7, 0.80"
+    #@gp :- "set xtics 1"
+    #@gp :- raw"""set xtics ('Mar 1' 39, 'Apr 1' 70, 'May 1' 100, 'Jun 1' 131, 'Jul 1' 161, 'Aug 1' 192, 'Sep 1' 223)"""
+    
+
 end

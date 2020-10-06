@@ -1,0 +1,770 @@
+---
+title: "Figure 2 analyses"
+author: "Vincent L. Cannataro"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_document
+---
+<!-- # death cumulative ggplot spatial plot for manuscript---- -->
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# preprocessed data created in R/sep2020_deaths_data_setup.R 
+load("output_data/states_geom_and_data.RData") 
+library(tidyverse); library(sf)
+library(viridis)
+library(magick) 
+# library(shadowtext)
+
+```
+
+
+
+# Figure build options
+
+These options are used to explore different gradients and transformations, etc. 
+```{r figure build options}
+
+geom_text.size <- 4 # size of the text in the map
+rainbow_colors <- 5 # number of colors in the rainbow color palette
+
+DEDCMD_labels <- F  # should DE, DC, and MD have their labels labeled?
+
+per_pop <- 1e3      # estimated deaths per how many people in the population
+
+gradient2 <- F
+gradient1 <- F
+gradient_full <- F
+
+gradient_full_trans <- T
+trans_type <- "log10"
+
+grad_type <- "_plasma_log"
+
+
+# if(gradient2){grad_type <- "_W_O_R"}
+# if(gradient1){grad_type <- "_W_R"}
+# if(gradient_full){grad_type <- "_full_spectrum"}
+
+
+
+grad1_col1 <- "white"
+grad1_col2 <- "red"
+
+
+grad2_col1 <- "white"
+grad2_col2 <- "orange"
+grad2_col3 <- "red"
+grad2_mid <- 1.2
+
+state_outline <- "gray80"
+
+# gradient_full_colors <- rev(rainbow(8,s = .9,v = .8))[2:8]
+# gradient_full_colors <- rev(viridis(7))
+# gradient_full_colors <- rev(inferno(7))
+gradient_full_colors <- rev(plasma(7))
+
+
+black_cutoff <- 0.4
+
+```
+
+
+
+
+# Data setup
+
+Preprocess the data for figure generation. 
+
+```{r data setup}
+
+# calculate per-capita deaths, bin if necessary
+states_and_geom_estimate <- states_geom_and_data %>% 
+  # filter(! state_abbv %in% c("HI","AK","WY","VT")) %>%
+  filter(date == "2020-09-07") %>%
+  # mutate(deaths_per_person_log10 = log10(deaths_per_person)) %>%
+  # mutate(deaths_per_person_log10 = case_when(deaths_per_person_log10 != -Inf ~ deaths_per_person_log10)) %>%
+  mutate(deaths_per_day_cum_per_person_per_10 = (deaths_per_day_cum * per_pop)/estimate) %>%
+  mutate(deaths_per_day_est_cum_per_person_per_10 = (deaths_per_day_est_cum * per_pop)/estimate) %>%
+  # mutate(deaths_binned_reported = cut(deaths_per_day_cum_per_person_per_10,breaks=c(0,0.01,0.1,0.5,1,2,3,4,5),include.lowest = T)) %>%
+  # mutate(deaths_binned_estimated = cut(deaths_per_day_est_cum_per_person_per_10,breaks=c(0,0.01,0.1,0.5,1,2,3,4,5),include.lowest = T))
+  mutate(deaths_binned_reported = cut(deaths_per_day_cum_per_person_per_10,breaks=c(0.1,0.25,0.5,1,1.5,2,3),include.lowest = T)) %>%
+  mutate(deaths_binned_estimated = cut(deaths_per_day_est_cum_per_person_per_10,breaks=c(0.1,0.25,0.5,1,1.5,2,3),include.lowest = T))
+
+
+# if using different colors for the plots
+cols_in_plot_estimated <- setNames(
+  object = scales::seq_gradient_pal(
+    low="#EECB8B",
+    # low="tomato",
+    high = "darkred")(seq(0,1,length.out = length(unique(states_and_geom_estimate$deaths_binned_estimated)))),
+  nm = levels(states_and_geom_estimate$deaths_binned_estimated))
+
+
+cols_in_plot_reported <- setNames(
+  object = scales::seq_gradient_pal(
+    low="#C3D3FB",
+    # low="cornflowerblue",
+    high = "darkblue")(seq(0,1,length.out = length(unique(states_and_geom_estimate$deaths_binned_estimated)))),
+  nm = levels(states_and_geom_estimate$deaths_binned_estimated))
+
+
+states_and_geom_estimate$deaths_binned_reported <- forcats::fct_rev(states_and_geom_estimate$deaths_binned_reported)
+states_and_geom_estimate$deaths_binned_estimated <- forcats::fct_rev(states_and_geom_estimate$deaths_binned_estimated)
+
+# just last date. 
+date_ind <- 230 
+
+data_for_spatial_ggplot <- states_and_geom_estimate 
+
+```
+
+
+# Customizing map label positions
+
+```{r adding state label locations}
+
+ccdf_labels <- urbnmapr::get_urbn_labels(map = "states",sf = T)
+
+ccdf <- urbnmapr::get_urbn_map(map = "states")
+ccdf_labels <- urbnmapr::get_urbn_labels(map = "states")
+
+ccdf_w_data <- left_join(x = ccdf, y = states_and_geom_estimate %>% 
+                           as.data.frame()%>% 
+                           dplyr::select(state_abbv, deaths_per_day_cum_per_person_per_10, deaths_per_day_est_cum_per_person_per_10,deaths_binned_reported,deaths_binned_estimated)) 
+ccdf_labels_w_data <- left_join(x = ccdf_labels, y = states_and_geom_estimate %>% 
+                                  as.data.frame() %>%
+                                  dplyr::select(state_abbv, deaths_per_day_cum_per_person_per_10, deaths_per_day_est_cum_per_person_per_10,deaths_binned_reported,deaths_binned_estimated)) 
+
+ccdf_labels_w_data <- ccdf_labels_w_data %>%
+  mutate(deaths_per_day_cum_per_person_per_10_round = as.character(round(deaths_per_day_cum_per_person_per_10,2))) %>%
+  mutate(deaths_per_day_est_cum_per_person_per_10_round = as.character(round(deaths_per_day_est_cum_per_person_per_10,2)))
+
+
+ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="HI",c("lat")] <- 25
+
+ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="NY",c("lat")] <- 44.5
+ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="NY",c("long")] <- -78
+
+
+ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="LA",c("lat")] <- 28.5
+ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="LA",c("long")] <- -92
+
+ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="FL",c("lat")] <- 27.5
+ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="FL",c("long")] <- -81.5
+
+ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="AL",c("lat")] <- 32.3
+ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="AL",c("long")] <- -86.7
+
+# ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="AK",c("lat")] <- 24.5
+# ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="AK",c("long")] <- -115.2
+
+ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="IL",c("lat")] <- 40
+ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="IL",c("long")] <- -89.7
+
+ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="NJ",c("lat")] <- 39.8
+ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="NJ",c("long")] <- -72.5
+
+ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="WV",c("long")] <- -81.2
+
+ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="NH",c("lat")] <- 46.8
+ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="NH",c("long")] <- -72.7
+
+ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="CT",c("lat")] <- 40
+ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="CT",c("long")] <- -69
+
+ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="RI",c("long")] <- -68.7
+
+
+
+if(DEDCMD_labels){ 
+  ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="DC",c("lat")] <- 36.5
+  ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="DC",c("long")] <- -70.5
+  
+  
+  ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="DC",c("deaths_per_day_cum_per_person_per_10_round")] <-
+    paste("DC:", ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="DC",c("deaths_per_day_cum_per_person_per_10_round")])
+  ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="DC",c("deaths_per_day_est_cum_per_person_per_10_round")] <-
+    paste("DC:", ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="DC",c("deaths_per_day_est_cum_per_person_per_10_round")])
+  
+  
+  ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="DE",c("lat")] <- 38
+  ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="DE",c("long")] <- -70
+  
+  ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="DE",c("deaths_per_day_cum_per_person_per_10_round")] <-
+    paste("DE:", ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="DE",c("deaths_per_day_cum_per_person_per_10_round")])
+  ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="DE",c("deaths_per_day_est_cum_per_person_per_10_round")] <-
+    paste("DE:", ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="DE",c("deaths_per_day_est_cum_per_person_per_10_round")])
+  
+  ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="MD",c("lat")] <- 35
+  ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="MD",c("long")] <- -70.85
+  
+  ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="MD",c("deaths_per_day_cum_per_person_per_10_round")] <-
+    paste("MD:", ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="MD",c("deaths_per_day_cum_per_person_per_10_round")])
+  ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="MD",c("deaths_per_day_est_cum_per_person_per_10_round")] <-
+    paste("MD:", ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="MD",c("deaths_per_day_est_cum_per_person_per_10_round")])
+  
+  
+  # ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="CT",c("lat","long")]
+  
+  ccdf_segments <-  data.frame(state=c("NH","CT","RI"),
+                               lat_1=c(43.8,41.5,41.5),
+                               lat_2=c(45.8,40.2,41.2),
+                               long_1=c(-71.7,-72.7,-71.3),
+                               long_2=c(-72.7,-70.7,-70.3))
+  
+}else{
+  
+  # no labels ---- 
+  
+  ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="DC",c("lat")] <- 36
+  ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="DC",c("long")] <- -74
+  # ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="DC",c("deaths_per_day_cum_per_person_per_10_round")] <-
+  #   paste("DC:", ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="DC",c("deaths_per_day_cum_per_person_per_10_round")])
+  # ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="DC",c("deaths_per_day_est_cum_per_person_per_10_round")] <-
+  #   paste("DC:", ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="DC",c("deaths_per_day_est_cum_per_person_per_10_round")])
+  
+  
+  ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="DE",c("lat")] <- 38.25
+  ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="DE",c("long")] <- -72
+  
+  # ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="DE",c("deaths_per_day_cum_per_person_per_10_round")] <-
+  #   paste("DE:", ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="DE",c("deaths_per_day_cum_per_person_per_10_round")])
+  # ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="DE",c("deaths_per_day_est_cum_per_person_per_10_round")] <-
+  #   paste("DE:", ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="DE",c("deaths_per_day_est_cum_per_person_per_10_round")])
+  # 
+  ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="MD",c("lat")] <- 37
+  ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="MD",c("long")] <- -72.5
+  
+  # ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="MD",c("deaths_per_day_cum_per_person_per_10_round")] <-
+  #   paste("MD:", ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="MD",c("deaths_per_day_cum_per_person_per_10_round")])
+  # ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="MD",c("deaths_per_day_est_cum_per_person_per_10_round")] <-
+  #   paste("MD:", ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="MD",c("deaths_per_day_est_cum_per_person_per_10_round")])
+  # 
+  
+  ccdf_labels_w_data[ccdf_labels_w_data$state_abbv=="CT",c("lat","long")]
+  
+  ccdf_segments <-  data.frame(state=c("NH","CT","RI","DC","DE","MD"),
+                               lat_1=c(43.8,41.5,41.5,38.9072,38.9108,38.2),
+                               lat_2=c(45.8,40.2,41.2,36.8,38.5,37.2),
+                               long_1=c(-71.7,-72.7,-71.3,-77.0369,-75.5277,-75.5277),
+                               long_2=c(-71.5,-70.7,-70.3,-74.8,-73.5,-74))
+  
+  
+  
+  
+}
+
+outside_states <- c("VT","NH","MA","RI","CT","NJ","DC","DE","MD","HI","AK")
+
+
+```
+
+
+# Reported death data spatial plot
+
+
+```{r reported spatial plot}
+
+daily_ggplot_reported <- ccdf_w_data %>%
+  # filter(! state_abbv %in% c("HI","AK","WY","VT")) %>%
+  # filter(! state_abbv %in% c("HI","AK")) %>%
+  ggplot() +
+  geom_polygon(aes(long, lat, group = group,fill=deaths_per_day_cum_per_person_per_10), color = state_outline, size = 0.25) +
+  # geom_polygon(aes(long, lat, group = group,fill=deaths_per_day_cum_per_person_per_10), color = "gray90", size = 0.25) +
+  # geom_text(data = ccdf_labels_w_data %>%
+  #             filter(state_abbv %in% outside_states), aes(long, lat, label = deaths_per_day_cum_per_person_per_10_round), size = geom_text.size,fontface = "bold") +
+  # geom_text(data = ccdf_labels_w_data %>% 
+  #             filter(state_abbv %in% outside_states |
+  #                      deaths_per_day_cum_per_person_per_10_round < black_cutoff), aes(long, lat, label = deaths_per_day_cum_per_person_per_10_round), size = geom_text.size,color="black",fontface="bold") +
+  # geom_text(data = ccdf_labels_w_data %>% 
+  #             filter(!state_abbv %in% outside_states &
+  #                      deaths_per_day_cum_per_person_per_10_round >= black_cutoff), aes(long, lat, label = deaths_per_day_cum_per_person_per_10_round), size = geom_text.size,color="white",fontface="bold") +
+    geom_text(data = ccdf_labels_w_data, aes(long, lat, label = deaths_per_day_cum_per_person_per_10_round), size = geom_text.size, fontface="bold") +
+  # geom_shadowtext(data = ccdf_labels_w_data, aes(long, lat, label = deaths_per_day_cum_per_person_per_10_round), size = geom_text.size,col='black', bg="white") +
+  # geom_text(data = ccdf_labels_w_data %>%
+  #             filter(!state_abbv %in% outside_states), aes(long, lat, label = deaths_per_day_cum_per_person_per_10_round), size = geom_text.size,fontface = "bold",color="black") +
+  # geom_text(data = ccdf_labels_w_data %>%
+  #             filter(!state_abbv %in% outside_states), aes(long, lat, label = deaths_per_day_cum_per_person_per_10_round), size = geom_text.size*1,color="white",fontface="bold") +
+  geom_segment(data = ccdf_segments, aes(y=lat_1,yend=lat_2,x=long_1,xend=long_2),alpha=0.5) +
+  # scale_fill_manual(values = cols_in_plot_reported,
+  #                   name="Reported deaths\nper 1,000 people",
+  #                   guide = guide_legend(reverse = TRUE),drop=FALSE,
+  #                   labels = levels(data_for_spatial_ggplot$deaths_binned_reported)
+  # ) +
+  # scale_fill_gradient2(na.value = "gray90",low = "white",mid = "orange",midpoint = 1.2, high = "red", name = "Reported deaths\nper 1,000 people",
+  #                      limits=c(min(ccdf_w_data$deaths_per_day_cum_per_person_per_10,ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T),
+  #                               max(ccdf_w_data$deaths_per_day_cum_per_person_per_10,ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T))) +
+  # scale_fill_gradient(low = "white", high = "darkred", name = "Reported deaths\nper 1,000 people",
+  #                     limits=c(min(ccdf_w_data$deaths_per_day_cum_per_person_per_10,ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T),
+  #                              max(ccdf_w_data$deaths_per_day_cum_per_person_per_10,ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T))) +
+# scale_fill_gradientn(colours = rainbow(rainbow_colors),name = "Reported deaths\nper 1,000 people",
+#                      limits=c(min(ccdf_w_data$deaths_per_day_cum_per_person_per_10,ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T),
+#                               max(ccdf_w_data$deaths_per_day_cum_per_person_per_10,ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T))) +
+scale_x_continuous(limits = c(-125, -60)) +
+  scale_y_continuous(limits = c(21, 50)) +    
+  coord_map(projection = "albers", lat0 = 39, lat1 = 45)  + 
+  theme(
+    panel.background = element_blank(),
+    plot.background = element_blank(),
+    # legend.background = element_rect(fill = "transparent",colour = NA),
+    text = element_text(size=12,color="black"),
+    axis.text = element_blank(),
+    line = element_line(size=0.25,color="black"),
+    legend.text = element_text(size=12,color="black"),
+    axis.ticks = element_blank(),
+    axis.title = element_blank(),
+    legend.title = element_text(size=12),
+    legend.position = "none"
+    # legend.position = "top"
+  ) + theme(plot.margin = margin(-5, -4, -5, -3, "cm"))
+
+
+if(gradient2){
+  daily_ggplot_reported <- daily_ggplot_reported + 
+    scale_fill_gradient2(na.value = "gray90",
+                         low = grad2_col1,
+                         mid = grad2_col2,
+                         midpoint = grad2_mid, 
+                         high = grad2_col3, 
+                         name = "Reported deaths\nper 1,000 people",
+                         limits=c(min(ccdf_w_data$deaths_per_day_cum_per_person_per_10,
+                                      ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T),
+                                  max(ccdf_w_data$deaths_per_day_cum_per_person_per_10,
+                                      ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T)))  
+}
+
+if(gradient1){
+  daily_ggplot_reported <- daily_ggplot_reported + 
+    scale_fill_gradient(na.value = "gray90",
+                        low = grad1_col1,
+                        high = grad1_col2, 
+                        name = "Reported deaths\nper 1,000 people",
+                        limits=c(min(ccdf_w_data$deaths_per_day_cum_per_person_per_10,
+                                     ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T),
+                                 max(ccdf_w_data$deaths_per_day_cum_per_person_per_10,
+                                     ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T)))  
+  
+}
+
+if(gradient_full){
+  daily_ggplot_reported <- daily_ggplot_reported + 
+    scale_fill_gradientn(colours = gradient_full_colors,
+                         na.value = "gray90",
+                         name = "Deaths per 1,000 people",
+                         limits=c(min(ccdf_w_data$deaths_per_day_cum_per_person_per_10,
+                                      ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T),
+                                  max(ccdf_w_data$deaths_per_day_cum_per_person_per_10,
+                                      ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T)))  
+}
+
+
+if(gradient_full_trans){
+  daily_ggplot_reported <- daily_ggplot_reported + 
+    scale_fill_gradientn(trans=trans_type,colours = gradient_full_colors,
+                         na.value = "gray90",
+                         name = "Deaths per 1,000 people",
+                         limits=c(min(ccdf_w_data$deaths_per_day_cum_per_person_per_10,
+                                      ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T),
+                                  max(ccdf_w_data$deaths_per_day_cum_per_person_per_10,
+                                      ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T)),
+                         breaks=c(0.1,0.25,0.5,1,1.5,2),labels=c(0.1,0.25,0.5,1,1.5,2))  
+}
+
+ggsave(filename = paste0("figures/fig_2_reported_gradient",date_ind,".png"),
+       plot = daily_ggplot_reported,width = 6, height = 4,dpi=300,units = "in",device = "png")
+
+ggsave(filename = paste0("figures/fig_2_reported_gradient",date_ind,".pdf"),
+       plot = daily_ggplot_reported,width = 6, height = 4,device = "pdf")
+
+
+
+```
+
+
+
+
+# Estimated deaths spatial plot
+
+
+```{r estimated spatial plot}
+
+daily_ggplot_estimated <- ccdf_w_data %>%
+  # filter(! state_abbv %in% c("HI","AK","WY","VT")) %>%
+  # filter(! state_abbv %in% c("HI","AK")) %>%
+  ggplot() +
+  geom_polygon(aes(long, lat, group = group,fill=deaths_per_day_est_cum_per_person_per_10), color = state_outline, size = 0.25) +
+  geom_text(data = ccdf_labels_w_data , aes(long, lat, label = deaths_per_day_est_cum_per_person_per_10_round), size = geom_text.size,fontface = "bold") + 
+  # geom_text(data = ccdf_labels_w_data %>%
+  #             filter(!state_abbv %in% outside_states), aes(long, lat, label = deaths_per_day_cum_per_person_per_10_round), size = geom_text.size,fontface = "bold",color="black") + 
+  # geom_text(data = ccdf_labels_w_data %>%
+  #             filter(!state_abbv %in% outside_states), aes(long, lat, label = deaths_per_day_est_cum_per_person_per_10_round), size = geom_text.size*1,color="white",fontface="bold") +
+  geom_segment(data = ccdf_segments, aes(y=lat_1,yend=lat_2,x=long_1,xend=long_2),alpha=0.5) +
+  # scale_fill_manual(values = cols_in_plot_estimated,
+  #                   name="Estimated deaths\nper 1,000 people",
+  #                   guide = guide_legend(reverse = TRUE),drop=FALSE,
+  #                   labels = levels(data_for_spatial_ggplot$deaths_binned_estimated)
+  # ) +
+  # scale_fill_gradient(low = "yellow", high = "red", name = "Reported deaths\nper 1,000 people",
+  #                     limits=c(min(ccdf_w_data$deaths_per_day_cum_per_person_per_10,ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T),
+  #                              max(ccdf_w_data$deaths_per_day_cum_per_person_per_10,ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T))) +
+  # scale_fill_gradient2(na.value = "gray90",low = "white",mid = "orange",midpoint = 1.2, high = "red", name = "Deaths\nper 1,000 people",
+  #                      limits=c(min(ccdf_w_data$deaths_per_day_cum_per_person_per_10,ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T),
+  #                               max(ccdf_w_data$deaths_per_day_cum_per_person_per_10,ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T))) +
+# scale_fill_gradientn(colours = rainbow(rainbow_colors),name = "Estimated deaths\nper 1,000 people",
+#                      limits=c(min(ccdf_w_data$deaths_per_day_cum_per_person_per_10,ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T),
+#                               max(ccdf_w_data$deaths_per_day_cum_per_person_per_10,ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T))) +
+scale_x_continuous(limits = c(-125, -60)) +
+  scale_y_continuous(limits = c(21, 50)) +    
+  coord_map(projection = "albers", lat0 = 39, lat1 = 45)  + 
+  theme(
+    panel.background = element_blank(),
+    plot.background = element_blank(),
+    # legend.background = element_rect(fill = "transparent",colour = NA),
+    text = element_text(size=12,color="black"),
+    axis.text = element_blank(),
+    line = element_line(size=0.25,color="black"),
+    legend.text = element_text(size=12,color="black"),
+    axis.ticks = element_blank(),
+    axis.title = element_blank(),
+    legend.title = element_text(size=12),
+    legend.position = "none"
+    # legend.position = "top"
+  ) + theme(plot.margin = margin(-5, -4, -5, -3, "cm"))
+
+
+
+if(gradient2){
+  daily_ggplot_estimated <- daily_ggplot_estimated + 
+    scale_fill_gradient2(na.value = "gray90",
+                         low = grad2_col1,
+                         mid = grad2_col2,
+                         midpoint = grad2_mid, 
+                         high = grad2_col3, 
+                         name = "Reported deaths\nper 1,000 people",
+                         limits=c(min(ccdf_w_data$deaths_per_day_cum_per_person_per_10,
+                                      ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T),
+                                  max(ccdf_w_data$deaths_per_day_cum_per_person_per_10,
+                                      ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T)))  
+}
+
+if(gradient1){
+  daily_ggplot_estimated <- daily_ggplot_estimated + 
+    scale_fill_gradient(na.value = "gray90",
+                        low = grad1_col1,
+                        high = grad1_col2, 
+                        name = "Reported deaths\nper 1,000 people",
+                        limits=c(min(ccdf_w_data$deaths_per_day_cum_per_person_per_10,
+                                     ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T),
+                                 max(ccdf_w_data$deaths_per_day_cum_per_person_per_10,
+                                     ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T)))  
+  
+}
+
+if(gradient_full){
+  daily_ggplot_estimated <- daily_ggplot_estimated + 
+    scale_fill_gradientn(colours = gradient_full_colors,
+                         na.value = "gray90",
+                         name = "Deaths per 1,000 people",
+                         limits=c(min(ccdf_w_data$deaths_per_day_cum_per_person_per_10,
+                                      ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T),
+                                  max(ccdf_w_data$deaths_per_day_cum_per_person_per_10,
+                                      ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T)))  
+}
+
+if(gradient_full_trans){
+  daily_ggplot_estimated <- daily_ggplot_estimated + 
+    scale_fill_gradientn(trans=trans_type,colours = gradient_full_colors,
+                         na.value = "gray90",
+                         name = "Deaths per 1,000 people",
+                         limits=c(min(ccdf_w_data$deaths_per_day_cum_per_person_per_10,
+                                      ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T),
+                                  max(ccdf_w_data$deaths_per_day_cum_per_person_per_10,
+                                      ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T)),
+                         breaks=c(0.1,0.25,0.5,1,1.5,2),labels=c(0.1,0.25,0.5,1,1.5,2))  
+}
+
+ggsave(filename = paste0("figures/fig_2_estimated_gradient",date_ind,".png"),
+       plot = daily_ggplot_estimated,width = 6, height = 4,dpi = 300)
+
+
+ggsave(filename = paste0("figures/fig_2_estimated_gradient",date_ind,".pdf"),
+       plot = daily_ggplot_estimated,width = 6, height = 4)
+
+```
+
+
+
+# Legend for combined plot
+
+```{r spatial legend}
+
+daily_ggplot_estimated_4_legend <- ccdf_w_data %>%
+  # filter(! state_abbv %in% c("HI","AK","WY","VT")) %>%
+  # filter(! state_abbv %in% c("HI","AK")) %>%
+  ggplot() +
+  geom_polygon(aes(long, lat, group = group,fill=deaths_per_day_est_cum_per_person_per_10), color = state_outline, size = 0.25) +
+  geom_text(data = ccdf_labels_w_data %>%
+              filter(state_abbv %in% outside_states), aes(long, lat, label = deaths_per_day_est_cum_per_person_per_10_round), size = geom_text.size,fontface = "bold") + 
+  # geom_text(data = ccdf_labels_w_data %>%
+  #             filter(!state_abbv %in% outside_states), aes(long, lat, label = deaths_per_day_cum_per_person_per_10_round), size = geom_text.size,fontface = "bold",color="black") + 
+  geom_text(data = ccdf_labels_w_data %>%
+              filter(!state_abbv %in% outside_states), aes(long, lat, label = deaths_per_day_est_cum_per_person_per_10_round), size = geom_text.size*1,color="white",fontface="bold") +
+  geom_segment(data = ccdf_segments, aes(y=lat_1,yend=lat_2,x=long_1,xend=long_2),alpha=0.5) +
+  # scale_fill_manual(values = cols_in_plot_estimated,
+  #                   name="Estimated deaths\nper 1,000 people",
+  #                   guide = guide_legend(reverse = TRUE),drop=FALSE,
+  #                   labels = levels(data_for_spatial_ggplot$deaths_binned_estimated)
+  # ) +
+  # scale_fill_gradient2(na.value = "gray90",low = "white",mid = "orange",midpoint = 1, high = "red", name = "Deaths per 1,000 people",
+  #                      limits=c(min(ccdf_w_data$deaths_per_day_cum_per_person_per_10,ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T),
+  #                               max(ccdf_w_data$deaths_per_day_cum_per_person_per_10,ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T))) +
+  # scale_fill_gradient(low = "yellow", high = "red", name = "Reported deaths\nper 1,000 people",
+  #                     limits=c(min(ccdf_w_data$deaths_per_day_cum_per_person_per_10,ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T),
+  #                              max(ccdf_w_data$deaths_per_day_cum_per_person_per_10,ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T))) + 
+# scale_fill_gradientn(colours = rainbow(rainbow_colors),name = "Deaths per 1,000 people",
+# limits=c(min(ccdf_w_data$deaths_per_day_cum_per_person_per_10,ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T),
+#          max(ccdf_w_data$deaths_per_day_cum_per_person_per_10,ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T))) +
+scale_x_continuous(limits = c(-125, -60)) +
+  scale_y_continuous(limits = c(21, 50)) +  
+  coord_map(projection = "albers", lat0 = 39, lat1 = 45)  + 
+  theme(
+    panel.background = element_blank(),
+    plot.background = element_blank(),
+    # legend.background = element_rect(fill = "transparent",colour = NA),
+    text = element_text(size=12,color="black"),
+    axis.text = element_blank(),
+    line = element_line(size=0.25,color="black"),
+    legend.text = element_text(size=14,color="black"),
+    axis.ticks = element_blank(),
+    axis.title = element_blank(),
+    legend.title = element_text(size=14),
+    # legend.position = "none"
+    legend.position = "top"
+  ) + 
+  guides(fill = guide_colourbar(barwidth = 15, barheight = 1))
+
+
+
+if(gradient2){
+  daily_ggplot_estimated_4_legend <- daily_ggplot_estimated_4_legend + 
+    scale_fill_gradient2(na.value = "gray90",
+                         low =grad2_col1,
+                         mid = grad2_col2,
+                         midpoint = grad2_mid, 
+                         high = grad2_col3, 
+                         name = "Deaths per 1,000 people",
+                         limits=c(min(ccdf_w_data$deaths_per_day_cum_per_person_per_10,
+                                      ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T),
+                                  max(ccdf_w_data$deaths_per_day_cum_per_person_per_10,
+                                      ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T)))  
+}
+
+if(gradient1){
+  daily_ggplot_estimated_4_legend <- daily_ggplot_estimated_4_legend + 
+    scale_fill_gradient(na.value = "gray90",
+                        low = grad1_col1,
+                        high = grad1_col2, 
+                        name = "Deaths per 1,000 people",
+                        limits=c(min(ccdf_w_data$deaths_per_day_cum_per_person_per_10,
+                                     ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T),
+                                 max(ccdf_w_data$deaths_per_day_cum_per_person_per_10,
+                                     ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T)))  
+  
+}
+
+if(gradient_full){
+  daily_ggplot_estimated_4_legend <- daily_ggplot_estimated_4_legend + 
+    scale_fill_gradientn(colours = gradient_full_colors,
+                         na.value = "gray90",
+                         name = "Deaths per 1,000 people",
+                         limits=c(min(ccdf_w_data$deaths_per_day_cum_per_person_per_10,
+                                      ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T),
+                                  max(ccdf_w_data$deaths_per_day_cum_per_person_per_10,
+                                      ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T)))  
+}
+
+if(gradient_full_trans){
+  daily_ggplot_estimated_4_legend <- daily_ggplot_estimated_4_legend + 
+    scale_fill_gradientn(trans=trans_type,colours = gradient_full_colors,
+                         na.value = "gray90",
+                         name = "Deaths per 1,000 people",
+                         limits=c(min(ccdf_w_data$deaths_per_day_cum_per_person_per_10,
+                                      ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T),
+                                  max(ccdf_w_data$deaths_per_day_cum_per_person_per_10,
+                                      ccdf_w_data$deaths_per_day_est_cum_per_person_per_10,na.rm = T)),
+                         breaks=c(0.1,0.25,0.5,1,1.5,2),labels=c(0.1,0.25,0.5,1,1.5,2))  
+}
+
+
+
+
+
+gradient_legend <- cowplot::get_legend(daily_ggplot_estimated_4_legend)
+
+
+gradient_legend_draw <- cowplot::ggdraw(gradient_legend)
+
+ggsave(filename = paste0("figures/fig_2_legend",date_ind,".pdf"),
+       plot = gradient_legend_draw,height = 4,width = 12)
+
+ggsave(filename = paste0("figures/fig_2_legend",date_ind,".png"),
+       plot = gradient_legend_draw,height = 4,width = 12)
+
+```
+
+
+
+
+# Cumulative deaths line plot
+
+
+```{r cumulative deaths line plot data setup }
+
+load("output_data/country_deaths.RData")
+library(tidyverse);library(scales)
+
+
+
+fancy_scientific <- function(l) {
+  # turn in to character string in scientific notation
+  l <- format(l, scientific = TRUE)
+  l <- gsub("0e\\+00","0",l)
+  # quote the part before the exponent to keep all the digits
+  l <- gsub("^(.*)e", "'\\1'e", l)
+  # turn the 'e+' into plotmath format
+  l <- gsub("e", "%*%10^", l)
+  # return this as an expression
+  # l <- gsub("e\\+","e",l) 
+  # # convert 1x10^ or 1.000x10^ -> 10^ 
+  # l <- gsub("\\'1[\\.0]*\\'\\%\\*\\%", "", l)
+  parse(text=l)
+}
+
+
+cumulative_deaths <- deaths_country_m %>%
+  mutate(`Death type` = case_when(`Death type` == "deaths_per_day_est_cum" ~ "Estimated", 
+                                  `Death type` == "deaths_per_day_cum" ~ "Reported"))
+
+
+cumulative_deaths$`Death type` <- factor(cumulative_deaths$`Death type`, levels = (c("Estimated","Reported")))
+
+
+
+this_date <- unique(cumulative_deaths$date)[date_ind]
+
+max_deaths_rep <- subset(cumulative_deaths, date == this_date & `Death type` == "Reported")
+max_deaths_rep <- max_deaths_rep$`Cumulative deaths`
+```
+
+
+
+
+```{r cumulative deaths line curve}
+
+ggplot_line_plot_daily <- ggplot(cumulative_deaths) + 
+  # geom_line(aes(x=date, y=`Cumulative deaths`,color=`Death type`),size=2) +
+  geom_line(aes(x=date, y=`Cumulative deaths`,linetype=`Death type`),size=2) +
+  labs(y="Total COVID-19 deaths",
+       x= "Date (2020)") + 
+  # scale_y_continuous(labels = fancy_scientific) + 
+  scale_y_continuous(breaks = c(5e4,1e5,1.5e5,2e5),labels = c(parse(text = "5.0 %*%10^4"),
+                                                              parse(text = "1.0 %*%10^5"),
+                                                              parse(text = "1.5 %*%10^5"),
+                                                              parse(text = "2.0 %*%10^5"))) + 
+  scale_x_date(date_breaks = "1 months",labels = date_format("%b"),expand = c(0,0)) +
+  # scale_color_manual(values = setNames(object = c("#A23A1A","#422EA1"),
+  #                                      nm = c("Estimated","Reported")),
+  #                    guide = guide_legend(direction = "horizontal")) +
+  scale_linetype_manual(values = setNames(object = c("solid","twodash"),
+                                          nm = c("Estimated","Reported"))) +
+  theme_bw() + 
+  theme(
+    # panel.background = element_rect(fill = "white",colour = NA),
+    # plot.background = element_rect(fill = "transparent",colour = NA),
+    text = element_text(size=16,color="black"),
+    axis.text = element_text(size=16,color="black"),
+    line = element_line(size=0.25,color="black"),
+    # legend.background = element_rect(fill = "transparent",colour = NA),
+    legend.title=element_blank(),
+    legend.position = c(0.01,0.99),
+    legend.justification = c(0,1),
+    legend.text = element_text(size=16),legend.key.width=unit(6,"line")
+    # legend.key = element_rect(colour = "transparent", fill=NA)
+  ) + 
+  coord_cartesian(xlim = c(lubridate::ymd("2020-02-27"),max(cumulative_deaths$date))) + 
+  guides(linetype = guide_legend(override.aes = list(size = 1)))
+# theme(legend.key.size = unit(3,"line"))
+
+ggsave(filename = paste0("figures/fig_2_cumulative_deaths_ggplot_line_gradient",date_ind,".png"),
+       plot = ggplot_line_plot_daily,height = 4,width = 12,dpi = 300)
+
+ggsave(filename = paste0("figures/fig_2_cumulative_deaths_ggplot_line_gradient",date_ind,".pdf"),
+       plot = ggplot_line_plot_daily,height = 4,width = 12)
+
+```
+
+
+# Combine all images 
+
+```{r combine images}
+
+# library(magick)
+
+spatial_ggplot_rep <- magick::image_read(paste0("figures/fig_2_reported_gradient",date_ind,".png"),density = 300)
+spatial_ggplot_est <- magick::image_read(paste0("figures/fig_2_estimated_gradient",date_ind,".png"),density = 300)
+spatial_gradient_legend <- magick::image_read(paste0("figures/fig_2_legend",date_ind,".png"),density = 300)
+line_plot <- magick::image_read(paste0("figures/fig_2_cumulative_deaths_ggplot_line_gradient",date_ind,".png"),density = 300)
+
+# line_plot <- magick::image_read_pdf(paste0("figures/fig_2_cumulative_deaths_ggplot_line_gradient",date_ind,".pdf"),density = 300)
+# spatial_ggplot_rep <- magick::image_read_pdf(paste0("figures/fig_2_reported_gradient",date_ind,".pdf"),density = 300)
+# spatial_ggplot_est <- magick::image_read_pdf(paste0("figures/fig_2_estimated_gradient",date_ind,".pdf"),density = 300)
+# spatial_gradient_legend <- magick::image_read_pdf(paste0("figures/fig_2_legend",date_ind,".pdf"),density = 300)
+# image_crop(image, "100x150+50")
+
+# image_crop(magick::image_resize(spatial_ggplot_rep,"x1000"),geometry = "2000x1000+00")
+# image_crop(magick::image_resize(spatial_ggplot_est,"x1000"),geometry = "1100x1000+200")
+
+spatial_gradient_legend_resize <- image_crop(magick::image_resize(spatial_gradient_legend,"x1200"),geometry = "3600x200+0+500")
+magick::image_write(image = spatial_gradient_legend_resize,path = paste0("figures/fig_2_legend_resize",".png"))
+
+# image_crop(magick::image_resize(spatial_ggplot_rep,"x1200"))
+
+composite_image_all <- magick::image_append(c(image_crop(magick::image_resize(spatial_ggplot_rep,"x1200"),geometry = "1800x1150+0+0"),
+                                              image_crop(magick::image_resize(spatial_ggplot_est,"x1200"),geometry = "1800x1150+0+0")))
+
+
+composite_image_all <- magick::image_append(c(composite_image_all,spatial_gradient_legend_resize),stack = T)
+
+
+
+
+# composite_image_all <- magick::image_append(c(image_crop(magick::image_resize(spatial_ggplot_rep,"x1000"),geometry = "1100x1000+200"),
+#                                               image_crop(magick::image_resize(spatial_ggplot_est,"x1000"),geometry = "1100x1000+200")))
+
+# composite_image_all <- magick::image_append(c(composite_image_all,magick::image_resize(line_plot,"x700")),stack = T)
+composite_image_all <- magick::image_append(c(composite_image_all,magick::image_resize(line_plot,"x1200")),stack = T)
+
+composite_image_all <- magick::image_annotate(composite_image_all, paste0("A"), 
+                                              size = 75, location = "+1+1", color = "black") %>%
+  magick::image_annotate(., paste0("B"), 
+                         size = 75, location = "+1800+1", color = "black") %>%
+  magick::image_annotate(., paste0("C"), 
+                         size = 75, location = "+1+1300", color = "black")
+
+# composite_image_all
+
+# magick::image_write(image = composite_image_all,path = paste0("figures/fig_2_gradient",".png"),density = "300")
+
+# magick::image_write(image = composite_image_all,path = paste0("../figures/fig_2_gradient_rainbow",".png"))
+# 
+# magick::image_write(image = composite_image_all,path = paste0("../figures/fig_2_gradient_Y_R",".png"))
+
+magick::image_write(image = composite_image_all,path = paste0("figures/fig_2_gradient",grad_type,".png"),density = "300")
+
+
+composite_image_all
+
+```
+
+

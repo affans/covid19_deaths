@@ -8,7 +8,7 @@ args = commandArgs(trailingOnly=TRUE)
 
 # Create batch job and submit to the cluster
 
-for(index in 1:230){
+for(index in 1:255){
   
   file.create(paste("cluster_jobs/rayrender_deaths_",index,".sh",sep=""))
   sink(file = paste("cluster_jobs/rayrender_deaths_",index,".sh",sep=""))

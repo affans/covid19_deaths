@@ -29,10 +29,10 @@ for(image_index in 1:total_rayrender_frames){
                            size = 25, location = "+1750+950", color = "white") %>%
     magick::image_annotate(., paste0("Moghadas, S.M., Shoukat, A., Fitzpatrick, M.C., Wells, C.R., Pandey, A., \nCannataro, V.L., Abdollahi, E., Galvani, A.P. (2020) \nEstimating the number of COVID-19 deaths in the United States"), 
                            size = 15, location = "+1+925", color = "white") %>%
-    magick::image_annotate(., paste0("Reported deaths"), 
-                           size = 25, location = "+620+760", color = "white") %>%
-    magick::image_annotate(., paste0("Estimated deaths"), 
-                           size = 25, location = "+1620+760", color = "white")
+    magick::image_annotate(., paste0("Reported deaths\nper 1,000 people in each state"), 
+                           size = 25, location = "+610+775", color = "white") %>%
+    magick::image_annotate(., paste0("Estimated deaths\nper 1,000 people in each state"), 
+                           size = 25, location = "+1610+775", color = "white")
   
     magick::image_write(image = composite_image_all,path = paste0("figures/frames/composite_image_all_deaths_",image_index,".png"))
   

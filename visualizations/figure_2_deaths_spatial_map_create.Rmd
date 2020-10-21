@@ -3,6 +3,9 @@ title: "Figure 2 analyses"
 author: "Vincent L. Cannataro"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output: html_document
+bibliography: [packages.bib, rayrender_bib.bib]
+nocite: |
+  @R-base, @R-dplyr, @R-ggplot2, @R-glue, @R-knitr, @R-lubridate, @R-magick, @R-rayrender, @R-scales, @R-sf, @R-tidycensus, @R-tidyverse, @R-urbnmapr, @R-viridis, @sf2018, @tidyverse2019
 ---
 <!-- # death cumulative ggplot spatial plot for manuscript---- -->
 
@@ -11,10 +14,13 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # preprocessed data created in R/deaths_data_setup.R 
 load("output_data/states_geom_and_data.RData") 
-library(tidyverse); library(sf)
+library(tidyverse) 
+library(sf)
+library(scales)
 library(viridis)
 library(magick) 
 # library(shadowtext)
+
 
 ```
 
@@ -623,7 +629,6 @@ ggsave(filename = paste0("figures/fig_2_legend",date_ind,".png"),
 ```{r cumulative deaths line plot data setup }
 
 load("output_data/country_deaths.RData")
-library(tidyverse);library(scales)
 
 
 
@@ -771,3 +776,15 @@ composite_image_all
 ```
 
 
+
+
+```{r, include=F}
+knitr::write_bib(c(.packages(),
+                   "lubridate",
+                   "glue",
+                   "urbnmapr",
+                   "tidycensus",
+                   "knitr"), "packages.bib")
+```
+
+# References 

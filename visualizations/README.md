@@ -21,7 +21,7 @@ All frames stored within `figures/frames`, then combined.
 
 3. Run `R/deaths_rayrender_render.R` using the `Rscript` command. 
 E.g., at the command line run `Rscript R/deaths_rayrender_render.R [date number]` where `[date number]` is a number 
-from 1 to 230. I ran this on a cluster, using the script in the `scripts_for_cluster` directory to submit all 230 jobs at once. 
+from 1 to the number of dates in the analysis. I ran this on a cluster, using the script in the `scripts_for_cluster` directory to submit all jobs at once. 
 
 ### Run 2D visualizations
 

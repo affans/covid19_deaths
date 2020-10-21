@@ -8,7 +8,9 @@ args = commandArgs(trailingOnly=TRUE)
 
 # Create batch job and submit to the cluster
 
-for(index in 1:255){
+load("output_data/states_geom_and_data.RData")
+
+for(index in 1:length(unique(states_geom_and_data$date))){
   
   file.create(paste("cluster_jobs/rayrender_deaths_",index,".sh",sep=""))
   sink(file = paste("cluster_jobs/rayrender_deaths_",index,".sh",sep=""))

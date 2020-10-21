@@ -27,7 +27,7 @@ for(image_index in 1:total_rayrender_frames){
     magick::image_composite(., magick::image_resize(spatial_ggplot_est,"x300"),offset = "+1400+25") %>%
     magick::image_annotate(., paste0("Date: ",unique(deaths_country_m$date)[image_index]), 
                            size = 25, location = "+1750+950", color = "white") %>%
-    magick::image_annotate(., paste0("Moghadas, S.M., Shoukat, A., Fitzpatrick, M.C., Wells, C.R., Pandey, A., \nCannataro, V.L., Abdollahi, E., Galvani, A.P. (2020) \nEstimating the number of COVID-19 deaths in the United States"), 
+    magick::image_annotate(., paste0("Shoukat, A., Moghadas, S.M.,  Fitzpatrick, M.C., Wells, C.R., \nAbdollahi, E.,  Pandey, A., Cannataro, V.L.,  Galvani, A.P. (2020) \nEstimating the number of COVID-19 deaths in the United States"), 
                            size = 15, location = "+1+925", color = "white") %>%
     magick::image_annotate(., paste0("Reported deaths\nper 1,000 people in each state"), 
                            size = 25, location = "+610+775", color = "white") %>%

@@ -11,6 +11,7 @@ Within the `input_data` directory there exists the reported deaths data `Death.c
 # Figure 2 
 
 2. Run  `figure_2_deaths_spatial_map_create.Rmd` to build figure 2 in the manuscript. 
+This RMarkdown document was knit to HTML, which can be viewed [here](https://htmlpreview.github.io/?https://github.com/affans/covid19_deaths/blob/master/visualizations/figure_2_deaths_spatial_map_create.html).  
 
 # Spatiotemporal visualization
 

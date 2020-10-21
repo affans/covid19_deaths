@@ -3,9 +3,9 @@
 library(tidyverse);library(lubridate)
 
 # load in Deaths data and annotate ---- 
-deaths_per_state <- read.csv(file = "input_data/Death.csv",header = F)
+deaths_per_state <- read.csv(file = "input_data/Death.csv",header = T)
 
-rownames(deaths_per_state) <-  seq.Date(from = ymd("2020-01-23"),to = ymd("2020-10-03"),by = "1 day")
+rownames(deaths_per_state) <-  seq.Date(from = ymd("2020-01-22"),to = ymd("2020-10-09"),by = "1 day")
 
 # dates_mat <- data.frame(date = seq.Date(from = ymd("2020-01-22"),to = ymd("2020-10-03"),by = "1 day"))
 
@@ -26,7 +26,7 @@ galvani_deaths_per_state <- deaths_per_state %>%
 
 deaths_per_state_est <- read.csv(file = "input_data/EDeath.csv",header = F)
 
-rownames(deaths_per_state_est) <-  seq.Date(from = ymd("2020-01-23"),to = ymd("2020-10-03"),by = "1 day")
+rownames(deaths_per_state_est) <-  seq.Date(from = ymd("2020-01-22"),to = ymd("2020-10-09"),by = "1 day")
 
 state_names <- c("AK", "AL", "AR", "AZ", "CA", "CO", "CT", "DC", "DE", "FL", 
                  "GA", "HI", "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA",

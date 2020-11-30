@@ -16,7 +16,7 @@ library(tidyverse) # not on the cluster
 library(bayestestR)
 
 extract_data <- function(st){
-  deathdata = get_state_data_vectors(st, ma=F)$death
+  deathdata = get_state_data_vectors(st, ma=F)$alldeath
   
   posterior_y = fread(qq("/data/actualdeaths_covid19/st_@{st}_00_posterior_y.dat"))
   posterior_z = fread(qq("/data/actualdeaths_covid19/st_@{st}_00_posterior_z.dat"))
@@ -100,6 +100,10 @@ create_table <- function(st){
 }
 
 create_table_states <- function(){
+  # NYTimes has second outlier that is replaced is with confirmed number
+  # this happeend on June 30th 
+  # we eventually add this back in the totals in the manuscript/appendix
+  # remember that the table that is generated will have this number missing so add it in
   aa = data.table(rbindlist(map(validstates, create_table)))
   aa = aa %>% left_join(select(city_metadata, c(state, abbr)), by = c("st" = "abbr"))
   aa = aa %>% relocate(state, .before = death)

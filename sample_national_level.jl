@@ -30,7 +30,7 @@ const to = TimerOutput()
 const list_of_states = ["AK", "AL", "AR", "AZ", "CA", "CO", "CT", "DC", "DE", "FL", "GA", "HI", "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA", "MD", "ME", "MI", "MN", "MO", "MS", "MT", "NC", "ND", "NE", "NH", "NJ", "NM", "NV", "NY", "OH", "OK", "OR", "PA",  "RI", "SC", "SD", "TN", "TX", "UT", "VA", "VT", "WA", "WI", "WV", "WY"]
 
 function create_all_USTs() 
-    timepoints = 230  # starting at january 22 + timepoints (i.e. total number of points in data)
+    timepoints = 304  # starting at january 22 to november 20
 
     map(list_of_states) do vs
         println("processing $vs")
@@ -49,26 +49,6 @@ function create_all_USTs()
         CSV.write("/data/actualdeaths_covid19/UST_af_$(vs)_posterior_z.csv", newdf_z)        
     end
 end
-
-# function check_UST()
-#     # function was used to check Seyed' UST outpuyt to my function above
-#     timecheck = []
-#     colcheck = []
-#     map(list_of_states) do vs 
-#         println("processing $vs")
-#         sm = "/data/actualdeaths_covid19/UST_$(vs)_posterior_z.csv"
-#         as = "/data/actualdeaths_covid19/UST_af_$(vs)_posterior_z.csv"
-#         dfsm = CSV.File(sm, header=false) |> DataFrame!
-#         dfas = CSV.File(as, header=true) |> DataFrame!
-#         colc = sum.(eachrow(dfsm)) .≈ sum.(eachrow(dfas))        
-#         ll = length(findall(x -> x == 0, colc))
-#         push!(timecheck, ll)
-#         if ll == 0
-#             println("$vs is true")
-#         end        
-#     end
-#     return timecheck
-# end
 
 function read_UST(y_or_z) 
     df_of_states = Array{DataFrame, 1}(undef, length(list_of_states))
@@ -146,8 +126,14 @@ function get_national_statistics(df)
 end 
 
 function national_statistics() 
-    all_death_data = CSV.File("Death.csv", header=false) |> DataFrame!    
-    rename!(all_death_data, Symbol.(list_of_states))
+    #all_death_data = CSV.File("Death.csv", header=false) |> DataFrame! 
+    #rename!(all_death_data, Symbol.(list_of_states))
+    # we can just use our file now instead of Seyeds
+    # but now we have total, confirmed, and probable
+    all_death_data =  CSV.File("/data/actualdeaths_covid19/downloaded_data/incidence_deaths_lancetid.csv") |> DataFrame! 
+    _deathcols =  ["death_$i" for i in list_of_states]
+    all_death_data = select(all_death_data, _deathcols)
+
     df_y = CSV.File("/data/actualdeaths_covid19/national_y.dat", delim='\t', header=false) |> DataFrame!
     df_z = CSV.File("/data/actualdeaths_covid19/national_z.dat", delim='\t', header=false) |> DataFrame!
     proc_y = get_national_statistics(df_y) 
@@ -165,16 +151,17 @@ end
 
 function create_national_plot()     
     est = CSV.File("/data/actualdeaths_covid19/national_processed_zy.csv", header=true) |> DataFrame!    
-    est = est[37:end, :]  # data is from january 22, first death is feb 28 (37 days later)    
+    est = est[1:end, :] 
     xvals = est.time    
     @gp "set grid" "set key left"
     #@gp "set term svg enhanced standalone mouse size 600,400"    
     #@gp :- "set size 1000, 1000"  ## dosn't work in the terminal, but maybe for saving?  
     @gp :- "unset colorbox"
     #@gp :- "set xtics 1" "set xlabel 'Week'" "set ylabel 'Difference"
-    @gp :- "set xlabel 'Time (2020)'" "set ylabel 'Death Count"
+    @gp :- "set xlabel 'Time (2020)'" "set ylabel 'Death Count'"
     @gp :- "set key title 'Legend'"
     @gp :- "set key top left Left reverse samplen 1" ## ???
+    @gp :- "set label 'reported: $(round(sum(est.raw)))' at  graph 0.7, 0.95"
     @gp :- "set label 'cumulative mean sum: $(round(sum(est.means_y)))' at  graph 0.7, 0.9"
     @gp :- "set label 'cumulative lo sum: $(round(sum(est.lows_y)))' at  graph 0.7, 0.85"
     @gp :- "set label 'cumulative hi sum: $(round(sum(est.highs_y)))' at  graph 0.7, 0.80"
@@ -194,30 +181,39 @@ end
 
 function create_trace_plot(st)
     ## creates a trace plot for each state. 
-    est = CSV.File("/data/actualdeaths_covid19/st_NY_00_traceplots.dat", header=true) |> DataFrame!    
+    #println("am i not revising")
+    est = CSV.File("/data/actualdeaths_covid19/st_$(st)_00_traceplots.dat", header=true) |> DataFrame!    
     xvals = 1:nrow(est)
-
-    @gp "set grid" "set key left"
+    @gp "reset session"
+    @gp :- "set grid" "set key left"    
     @gp :- "unset colorbox"
-    @gp :- "set xlabel 'iteration'" "set ylabel 'parameter value"
-    
-    @gp :- "set size 1600, 1480"
-    @gp :- "set multiplot layout 5,1 rowsfirst margins 0.05,0.95,0.1,0.9 spacing 0.05,0.02" #l r b t
-    
-    params = [:a0, :a1, :b0, :b1, :b2]
-    for (i, n) in enumerate(params)
-        @gp :- xvals est[!, n] "with lines '$n' lw 0.1 lc 'black' " :- 
+    @gp :- "set xlabel 'iteration'" "set ylabel 'parameter value'"
+    @gp :- "set title '$st'"
+    #@gp :- "set size 1600, 1480"
+    @gp :- "set multiplot layout 5,1 rowsfirst margins 0.10,0.95,0.05,0.9 spacing 0.05,0.0" #l r b t
+
+    @gp :- "unset xlabel" 
+    @gp :- "unset ylabel"
+    @gp :- "unset xtics" 
+    @gp :- 1 xvals est[!, :a0] "with lines title '$(string(:a0))' lw 0.1 lc 'black'" :-         
+    @gp :- 2 xvals est[!, :a1] "with lines title '$(string(:a1))' lw 0.1 lc 'black'" :-    
+    @gp :- 3 xvals est[!, :b0] "with lines title '$(string(:b0))' lw 0.1 lc 'black'" :-
+    @gp :- "set ylabel 'parameter value'"
+    @gp :- 4 xvals est[!, :b1] "with lines title '$(string(:b1))' lw 0.1 lc 'black'" :-    
+    @gp :- "unset ylabel"
+    @gp :- 5 xvals est[!, :b2] "with lines title '$(string(:b2))' lw 0.1 lc 'black'"     
+    @gp :- "set xtics"    
+    #save(term="svg enhanced standalone mouse size 1600,800", output="trace_plot.svg")    
+    fname = "/data/actualdeaths_covid19/trace_plots_$st.ps"
+    save(term="postscript eps enhanced color size 6,6", output=fname) # size in inches for postscript
+    println("updated size 3")
+    #return est
+    return 1
+end
+
+function get_all_traceplots() 
+    map(list_of_states) do x 
+        println("working $x")
+        create_trace_plot(x)
     end
-    #est
-    return 2
-
-    #@gp :- "set key title 'Legend'"
-    #@gp :- "set key top left Left reverse samplen 1" ## ???
-    #@gp :- "set label 'cumulative mean sum: $(round(sum(est.means_y)))' at  graph 0.7, 0.9"
-    #@gp :- "set label 'cumulative lo sum: $(round(sum(est.lows_y)))' at  graph 0.7, 0.85"
-    #@gp :- "set label 'cumulative hi sum: $(round(sum(est.highs_y)))' at  graph 0.7, 0.80"
-    #@gp :- "set xtics 1"
-    #@gp :- raw"""set xtics ('Mar 1' 39, 'Apr 1' 70, 'May 1' 100, 'Jun 1' 131, 'Jul 1' 161, 'Aug 1' 192, 'Sep 1' 223)"""
-    
-
 end

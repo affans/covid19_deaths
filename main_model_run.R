@@ -49,32 +49,37 @@ library(stringr)
 city_metadata = fread("city_state_metadata.csv", colClasses = 'character')
 city_metadata$statepop = as.numeric(gsub(",", "", city_metadata$statepop)) # turn to numeric
 
-# state order in meanCFR,Death, and other files from Seyed 
+# state order in all files
 validstates = c("AK", "AL", "AR", "AZ", "CA", "CO", "CT", "DC", "DE", "FL", "GA", "HI", "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA", "MD", "ME", "MI", "MN", "MO", "MS", "MT", "NC", "ND", "NE", "NH", "NJ", "NM", "NV", "NY", "OH", "OK", "OR", "PA",  "RI", "SC", "SD", "TN", "TX", "UT", "VA", "VT", "WA", "WI", "WV", "WY")
+
+# all data must be in ascending order (ie. smallest date first)
           
 # load all the data
-all_death_data = fread("Death.csv")
+#all_death_data = fread("Death.csv")
+all_death_data = fread("/data/actualdeaths_covid19/downloaded_data/incidence_deaths_lancetid.csv")
+#names(all_death_data) <- validstates
+
 all_test_data = fread("Test.csv")
+names(all_test_data) <- validstates
+
 # for test data: flip as its in descending order and remove the date column
 # all_test_data = all_test_data %>% mutate(sortk = seq(nrow(all_test_data), 1)) %>% arrange(sortk)
 # all_test_data[, sortk := NULL]
 ur_case_data = fread("./meanINC.csv")
+names(ur_case_data) <- validstates
 # ur_case_data = as.data.table(lapply(ur_case_data, cumsum)) # turn columns into cumulative
 
 # get the hospital data... since this is raw data from covid tracking (and not processed by Seyed)
 # we have to arrange by date column and only get the number of rows as same as Seyeds files.
 # and also remove the date column 
 all_hosp_data = fread("hosp_data.csv")
-all_hosp_data = all_hosp_data %>%  mutate(date = as.Date(as.character(date), "%Y%m%d")) %>%
-  arrange(date) %>% head(nrow(ur_case_data)) %>% select(-!!c("date"))
-
+all_hosp_data = all_hosp_data %>%  mutate(date = as.Date(date, "%Y-%m-%d"))
+all_hosp_data = all_hosp_data %>%  arrange(date)  %>% select(-!!c("date"))
 # check if the order of states match, although this is is important since we select by column name and not index
 names(all_hosp_data) == validstates
 
-# attach column headers to all data frames
-names(all_death_data) <- validstates
-names(all_test_data) <- validstates
-names(ur_case_data) <- validstates
+# create a date vector corresponding to the rows. 
+datevector = seq(as.Date("2020/01/22"), as.Date("2020/01/22") + nrow(ur_case_data) - 1, "day")
 
 ## define global functions
 fitlmn <- function(dat, qu_val){
@@ -98,24 +103,85 @@ fitlmn <- function(dat, qu_val){
   return(fit1)
 }
 
+# deprecated, remove for next check in
+fitlmn_nyc_calibration <- function(dat, qu_val){
+  # qgam paper: Statistical distribution fitting to the number of COVID-19 deaths in South Africa
+  # follows the code samples from that paper -- can be optimized and cleaned up
+  adma3 = data.table(t = 1:length(dat), De_New = dat)
+  
+  # take 100 rows for training, the rest as test. 
+  De_data_test <- 50:nrow(adma3) 
+  data_train <- adma3[-De_data_test, ] 
+  data_test <- adma3[De_data_test, ]
+  set.seed(2356)
+  
+  ## bs = "ps"
+  tun <- tuneLearnFast(form=De_New~s(t,bs="ad"), err = 0.1, qu = qu_val, data = data_train) 
+  fit1 <- qgam(De_New~s(t,bs="ad"), err = 0.1, qu = qu_val, lsig = tun$lsig, data = adma3) 
+  
+  #summary(fit1, se="ker")
+  plot(adma3$De_New, xlab="Day, t", ylab="Reported deaths in SA", col="blue", type="b")
+  lines(fit1$fit, col="red")
+  return(fit1)
+}
+
+
 ## function to get state specific vectors
 get_state_data_vectors <- function(st, ma=F){
   ## get the data data, and remove the zeros
-  ddd = all_death_data[, get(st)]
+  
+  cdeath_name = qq("deathConfirmed_@{st}") 
+  adeath_name = qq("death_@{st}") 
+  
+  cdd = all_death_data[, get(cdeath_name)]
+  add = all_death_data[, get(adeath_name)]
+  #ddd = all_death_data[, get(st)]
+  
   urc = ur_case_data[, get(st)]
   tst = all_test_data[, get(st)]
   hos = all_hosp_data[, get(st)]
+  alllen = lengths(list(cdd, add, urc, tst, hos))
+  stopifnot(length(unique(alllen)) == 1)
   
-  firstnonzero = min( which ( ddd != 0 )) 
-  lastelement = length(ddd)
- # 2, 3
+  # some states have NA for missng hospital data near October 3 - 9th. 
+  # this could be because states havn't updated their data as of this analysis 
+  # we will in a few manual NAs by looking at the trend of hospitalization
+  if(st == "MN"){
+    hos[256:257] = (hos[255] + hos[258])/2
+  }
+  if(st == "MO"){
+    hos[258:260] = (hos[257] + hos[261])/2
+  }
+  
+  # we add one to test data for WA for model stability since there is division 
+  # in one of the covariates, and covid tracker returns 0. 
+  if(st == "WA"){
+    tst = tst + 1 
+  }
+  
+  # NYTimes has second outlier that is replaced is with confirmed number
+  # this happeend on June 30th 
+  # we eventually add this back in the totals in the manuscript/appendix
+  # remember that the table that is generated will have this number missing so add it in
+  if(st == "NY"){
+    ny_ano = which(datevector == "2020-06-30")
+    print(qq("NY spike @{cdd[ny_ano]}"))
+    add[ny_ano] = cdd[ny_ano]
+  }
+  
+  firstnonzero = min( which ( add != 0 ))
+  fnd = datevector[firstnonzero]
+  lastelement = length(add)
+ 
   if(ma){
-    death_rm = rollmean(ddd[(firstnonzero-2): lastelement], 3)
+    all_death_rm = rollmean(add[(firstnonzero-2): lastelement], 3)
+    cnf_death_rm = rollmean(cdd[(firstnonzero-2): lastelement], 3)
     urc_rm = rollmean(urc[(firstnonzero-2) : lastelement], 3)
     tst_rm = rollmean(tst[(firstnonzero-2) : lastelement], 3)
     hos_rm = rollmean(hos[(firstnonzero-2) : lastelement], 3)
   } else {
-    death_rm = ddd[firstnonzero : lastelement]
+    all_death_rm = add[firstnonzero : lastelement]
+    cnf_death_rm = cdd[firstnonzero : lastelement]
     urc_rm = urc[firstnonzero : lastelement]
     tst_rm = tst[firstnonzero : lastelement]
     hos_rm = hos[firstnonzero : lastelement]
@@ -123,7 +189,9 @@ get_state_data_vectors <- function(st, ma=F){
   # TX and GA have two NAs at start of data, replace with their 3rd index
   if(st == "TX" || st == "GA")
     tst_rm[is.na(tst_rm)] = tst_rm[3]
-  return(list(death=death_rm, urcases=urc_rm, tstdata=tst_rm, hospdata=hos_rm))
+  
+
+  return(list(firstnonzero_date=fnd, alldeath=all_death_rm, cnfdeath=cnf_death_rm, urcases=urc_rm, tstdata=tst_rm, hospdata=hos_rm))
 }
 
 fill_hospital_data <- function(hospdata, deathdata){
@@ -185,7 +253,7 @@ read_cdc_excess_death_data <- function(){
 fmeans = read_cdc_excess_death_data()
 
 get_normalized_deaths <- function(st){
-  cumdeaths = sum(get_state_data_vectors(st, ma=F)$death)
+  cumdeaths = sum(get_state_data_vectors(st, ma=F)$alldeath)
   popsize = (city_metadata %>% filter(abbr == st))$statepop
   rt = cumdeaths / popsize * 100000 # normalize to population 
   rt = log(rt) # take the log 
@@ -211,10 +279,11 @@ st_norm_deaths <- st_norm_deaths %>% left_join(l_tib, by = c("states" = "abbr"))
 st_norm_deaths <- st_norm_deaths %>% mutate(redblue_diff = abs(bzval - logdeaths)/2)
 #seyed_dt <- seyed_dt %>% mutate(diffdis = dat - linept) %>% mutate(newpt = linept - diffdis)
 
-# we need to adjust the logdeaths values to calibrate the model. 
+# we need to adjust the logdeaths values to calibrate the model
 # the model should be calibrated so that NY gives the reported underreporting ~30%
-correction_factor = (1.88 + 1.1) # where 1.88 is the diff between NY bzval and CDC excess death.
-st_norm_deaths <- st_norm_deaths %>% mutate(newbz = 2*correction_factor - logdeaths)
+# NY correction factor: 1.7, rest 1.3
+cfac = 2.0*(1.88 + 1.7)
+st_norm_deaths <- st_norm_deaths %>% mutate(newbz = cfac - logdeaths)
 
 # have to manually adjust PA as the logdeaths produces a very nonrealistic number
 # we pick 3.5 as that gets us to the maximum of excess deaths reported by CDC
@@ -231,7 +300,7 @@ gg <- gg + geom_point(aes(x=states, y=newbz,  color="corrected"))
 gg <- gg + geom_line(aes(x=states, y=newbz, group=1,  color="corrected"))
 gg <- gg + scale_color_manual(values=colors)
 gg <- gg + ylim(c(0, 6.0))
-gg <- gg + geom_hline(aes(yintercept=correction_factor))
+gg <- gg + geom_hline(aes(yintercept=cfac))
 gg
 
 # model def and implementation ---------------------------------------------------------------
@@ -254,41 +323,52 @@ lmod_code = nimbleCode({
   b3 ~ dnorm(0, sd = 10) 
 })
 
-# informative mean values for b0 in the MCMC model. 
-# these values are estimated using CDC excess deaths.
-# see function read_cdc_excess_death_data()
-
 # get command line argument for state
 args = commandArgs(trailingOnly=TRUE)
 arg_st = validstates[as.numeric(args[1])]
-#arg_st = "HI" 
+#arg_st = "GA" 
 WRITE_DATA = T # write data files at the end
 print(qq("Working with state: @{arg_st}"))
 
 bzvalue = st_norm_deaths %>% filter(states == arg_st) %>% select(newbz) %>% .$newbz
 print(qq("bzval: @{bzvalue}"))
 popsize = (city_metadata %>% filter(abbr == arg_st))$statepop
-  
-deathdata = get_state_data_vectors(arg_st, ma=F)$death
-nobs = length(deathdata)
-# ma = t for the next three
-deathdata_ma = get_state_data_vectors(arg_st, ma=T)$death
+
+alldeathdata = get_state_data_vectors(arg_st, ma=F)$alldeath
+cnfdeathdata = get_state_data_vectors(arg_st, ma=F)$cnfdeath
+# ma = t for the next data
+alldeathdata_ma = get_state_data_vectors(arg_st, ma=T)$alldeath
+cnfdeathdata_ma = get_state_data_vectors(arg_st, ma=T)$cnfdeath
 urcases = get_state_data_vectors(arg_st, ma=T)$urcases
 tstdata = get_state_data_vectors(arg_st, ma=T)$tstdata
 hospdata = get_state_data_vectors(arg_st, ma=T)$hospdata
-hospdata = fill_hospital_data(hospdata, deathdata) 
+hospdata = fill_hospital_data(hospdata, alldeathdata) 
+
+firstnonzero_date = get_state_data_vectors(arg_st, ma=F)$firstnonzero_date
+
+## calibration process to NYC
+# nyc_end_date = as.numeric(as.Date("2020-05-02") - firstnonzero_date)
+# deathdata = deathdata[1:nyc_end_date]
+# deathdata_ma = deathdata_ma[1:nyc_end_date]
+# urcases = urcases[1:nyc_end_date]
+# tstdata = tstdata[1:nyc_end_date]
+# hospdata = hospdata[1:nyc_end_date]
+
+#poly_tim = fitlmn_nyc_calibration(deathdata_ma, 0.5)$fitted.values
+#poly_tim[poly_tim < 0] = 1e-5 # for model stability
 
 #fit the data (fit to rolling avg to smooth out, seyed's idea)
-poly_tim = fitlmn(deathdata_ma, 0.5)$fitted.values
-#poly_tim[which(deathdata == 0)] <- 0 
+poly_tim = fitlmn(alldeathdata_ma, 0.5)$fitted.values
 poly_tim[poly_tim < 0] = 1e-5 # for model stability
 
+nobs = length(alldeathdata)
+
 ## plot the data to review later 
-dat_df = data.table(time=1:nobs, death=as.numeric(deathdata), cases=urcases, tests=tstdata, hosp=hospdata)
-dat_df_m = melt(dat_df, id.vars = "time", measure.vars = c("death", "cases", "tests", "hosp"))
+dat_df = data.table(time=1:nobs, death=as.numeric(alldeathdata), cnfdeath=as.numeric(cnfdeathdata), cases=urcases, tests=tstdata, hosp=hospdata)
+dat_df_m = melt(dat_df, id.vars = "time", measure.vars = c("death", "cnfdeath", "cases", "tests", "hosp"))
 gg = ggplot(dat_df_m) 
 gg = gg + geom_line(aes(x=time, y=value))
-gg = gg + facet_wrap(facets=vars(variable), nrow = 2, ncol = 2, scales="free") 
+gg = gg + facet_wrap(facets=vars(variable), nrow = 3, ncol = 2, scales="free") 
 # labeller = as_labeller(c(A = "Currents (A)", V = "Voltage (V)") )
 gg = gg + ylab(NULL) + xlab("Time")
 gg
@@ -297,37 +377,44 @@ if (WRITE_DATA){
 }
 
 # x1: proportion of people dead out of total infected (basically cfr, but with timing issue)
-prop_death = deathdata_ma / urcases
+prop_death = alldeathdata_ma / urcases
 
 # x2: interpret: estimated cases that were tested
 risk_death = urcases / tstdata 
 
 # x3: death divided by hosp - proportion of deaths that were hospitalized
 # the ratio of death to hospitalized cases. informing to some degree the proportion of under reporting
-risk_hosp = deathdata_ma / hospdata
+risk_hosp = cnfdeathdata_ma / hospdata
 
 # mean and sd of the parameter a1 in the model 
 # for most states this is relatively uninformative 
 # for WY, HI, AK, VT, make the mean/sd tighter
 # this is because bad fitting as lots of zeros
-if (arg_st %in% c("WY", "HI", "AK", "VT")){
+if (arg_st %in% c("WY", "VT")){
   a1mean = 0
   a1sd = 0.1
+} else if (arg_st %in% c("HI", "AK")){
+  a1mean = 1 
+  a1sd = 0.2
+} else if (arg_st == "ND"){
+  a1mean = 0
+  a1sd = 0.2
 } else {
-  a1mean = 10 
+  a1mean = 10
   a1sd = 1
 }
-print("a1mean: @{a1mean}, a1sd: @{a1sd}")
+
+print(qq("a1mean: @{a1mean}, a1sd: @{a1sd}"))
 
 # Set initial values.
-inits1=list(a0=0, a1=1, b0 = 0, b1 = 7.5, b2=8.5, b3=1, y=deathdata)
-inits2=list(a0=0, a1=1, b0 = 0, b1 = 8, b2=8, b3=1, y=deathdata)
-inits3=list(a0=0, a1=1, b0 = 0, b1 = 8.5, b2=7.5, b3=1, y=deathdata)
+inits1=list(a0=0, a1=1, b0 = 0, b1 = 7.5, b2=8.5, b3=1, y=alldeathdata)
+inits2=list(a0=0, a1=1, b0 = 0, b1 = 8, b2=8, b3=1, y=alldeathdata)
+inits3=list(a0=0, a1=1, b0 = 0, b1 = 8.5, b2=7.5, b3=1, y=alldeathdata)
 inits=list(chain1=inits1, chain2=inits2, chain3=inits3)
 
 # load the constants and data
 lmod_constants = list(n = nobs, K=popsize, deaths=poly_tim, x1=risk_death, x2=prop_death, x3=risk_hosp, bzval=bzvalue, a1mean=a1mean, a1sd=a1sd)
-lmod_data = list(z = deathdata)
+lmod_data = list(z = alldeathdata)
 
 #Build the model.
 model <- nimbleModel(lmod_code, lmod_constants, lmod_data, inits)
@@ -375,7 +462,7 @@ if (WRITE_DATA){
 }
 
 # get cumulative numbers to inspect/plot
-c_data = sum(deathdata)
+c_data = sum(alldeathdata)
 c_mns1 = round(sum(mns1), 2)
 c_mns2 = round(sum(mns2), 2)
 c_pinc = round((c_mns1 - c_data)/c_data, 2)
@@ -383,8 +470,8 @@ c_finc = round((c_mns1 - sum(poly_tim))/sum(poly_tim), 2)
 
 c_binc = round((c_mns1 - c_mns2)/c_mns2, 2)
 cdc_pexcess = round(as.numeric(fmeans %>% filter(abbr == arg_st) %>% select("percent_val") ), 2)
-xvals = length(deathdata)
-c_Str = qq(" st: @{arg_st}, data: @{c_data}, true: @{c_mns1}, obs: @{c_mns2}, %inc (data): @{c_pinc}, %inc (blue): @{c_binc}, cdc: @{cdc_pexcess}")
+xvals = length(alldeathdata)
+c_Str = qq(" st: @{arg_st}, data: @{c_data}, true: @{c_mns1}, obs: @{c_mns2}, %inc (data): @{c_pinc}, %inc (blue): @{c_binc}")
 print(c_Str)
 
 plot(df$a0)
@@ -396,8 +483,8 @@ plot(df$b3)
 plot(apply(posterior_pi, 2, mean))
 
 gg = ggplot()
-gg = gg + geom_point(aes(x=1:xvals, y=deathdata), color="#636363")
-gg = gg + geom_line(aes(x=1:xvals, y=deathdata), color="#636363")
+gg = gg + geom_point(aes(x=1:xvals, y=alldeathdata), color="#636363")
+gg = gg + geom_line(aes(x=1:xvals, y=alldeathdata), color="#636363")
 gg = gg + geom_line(aes(x=1:xvals, y=mns1), color="#e41a1c", size=1.2)
 #gg = gg + ylim(0, 500)
 gg = gg + geom_line(aes(x=1:xvals, y=mns2), color="#377eb8", size=1.2)

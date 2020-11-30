@@ -3,7 +3,11 @@ args = commandArgs(trailingOnly=TRUE)
 
 library(tidyverse);library(lubridate)
 library(sf)
-library(rayrender)
+library(rayrender) 
+
+# rayrender has great tutorials, including a gist that shows how to 
+# extrude polygon states along a color spectrum 
+# https://gist.github.com/tylermorganwall/19b2a39ee881e27d42ba5661f0867052 
 
 date_ind <- as.numeric(args[1])
 

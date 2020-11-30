@@ -3,18 +3,24 @@ title: "Figure 2 analyses"
 author: "Vincent L. Cannataro"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output: html_document
+bibliography: [packages.bib, rayrender_bib.bib]
+nocite: |
+  @R-base, @R-dplyr, @R-ggplot2, @R-glue, @R-knitr, @R-lubridate, @R-magick, @R-rayrender, @R-scales, @R-sf, @R-tidycensus, @R-tidyverse, @R-urbnmapr, @R-viridis, @sf2018, @tidyverse2019
 ---
 <!-- # death cumulative ggplot spatial plot for manuscript---- -->
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
-# preprocessed data created in R/sep2020_deaths_data_setup.R 
+# preprocessed data created in R/deaths_data_setup.R 
 load("output_data/states_geom_and_data.RData") 
-library(tidyverse); library(sf)
+library(tidyverse) 
+library(sf)
+library(scales)
 library(viridis)
 library(magick) 
 # library(shadowtext)
+
 
 ```
 
@@ -81,7 +87,8 @@ Preprocess the data for figure generation.
 # calculate per-capita deaths, bin if necessary
 states_and_geom_estimate <- states_geom_and_data %>% 
   # filter(! state_abbv %in% c("HI","AK","WY","VT")) %>%
-  filter(date == "2020-09-07") %>%
+  # filter(date == "2020-09-07") %>%
+  filter(date == "2020-10-03") %>%
   # mutate(deaths_per_person_log10 = log10(deaths_per_person)) %>%
   # mutate(deaths_per_person_log10 = case_when(deaths_per_person_log10 != -Inf ~ deaths_per_person_log10)) %>%
   mutate(deaths_per_day_cum_per_person_per_10 = (deaths_per_day_cum * per_pop)/estimate) %>%
@@ -113,7 +120,7 @@ states_and_geom_estimate$deaths_binned_reported <- forcats::fct_rev(states_and_g
 states_and_geom_estimate$deaths_binned_estimated <- forcats::fct_rev(states_and_geom_estimate$deaths_binned_estimated)
 
 # just last date. 
-date_ind <- 230 
+date_ind <- 255
 
 data_for_spatial_ggplot <- states_and_geom_estimate 
 
@@ -622,7 +629,6 @@ ggsave(filename = paste0("figures/fig_2_legend",date_ind,".png"),
 ```{r cumulative deaths line plot data setup }
 
 load("output_data/country_deaths.RData")
-library(tidyverse);library(scales)
 
 
 
@@ -762,9 +768,23 @@ composite_image_all <- magick::image_annotate(composite_image_all, paste0("A"),
 
 magick::image_write(image = composite_image_all,path = paste0("figures/fig_2_gradient",grad_type,".png"),density = "300")
 
+magick::image_write(image = composite_image_all,path = paste0("figures/fig_2_final.png"),density = "300")
+
 
 composite_image_all
 
 ```
 
 
+
+
+```{r, include=F}
+knitr::write_bib(c(.packages(),
+                   "lubridate",
+                   "glue",
+                   "urbnmapr",
+                   "tidycensus",
+                   "knitr"), "packages.bib")
+```
+
+# References 

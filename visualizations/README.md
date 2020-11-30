@@ -11,6 +11,7 @@ Within the `input_data` directory there exists the reported deaths data `Death.c
 # Figure 2 
 
 2. Run  `figure_2_deaths_spatial_map_create.Rmd` to build figure 2 in the manuscript. 
+This RMarkdown document was knit to HTML, which can be viewed [here](https://htmlpreview.github.io/?https://github.com/affans/covid19_deaths/blob/master/visualizations/figure_2_deaths_spatial_map_create.html).  
 
 # Spatiotemporal visualization
 
@@ -20,7 +21,7 @@ All frames stored within `figures/frames`, then combined.
 
 3. Run `R/deaths_rayrender_render.R` using the `Rscript` command. 
 E.g., at the command line run `Rscript R/deaths_rayrender_render.R [date number]` where `[date number]` is a number 
-from 1 to 230. I ran this on a cluster, using the script in the `scripts_for_cluster` directory to submit all 230 jobs at once. 
+from 1 to the number of dates in the analysis. I ran this on a cluster, using the script in the `scripts_for_cluster` directory to submit all jobs at once. 
 
 ### Run 2D visualizations
 

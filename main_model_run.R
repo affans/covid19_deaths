@@ -59,14 +59,23 @@ validstates = c("AK", "AL", "AR", "AZ", "CA", "CO", "CT", "DC", "DE", "FL", "GA"
 all_death_data = fread("/data/actualdeaths_covid19/downloaded_data/incidence_deaths_lancetid.csv")
 #names(all_death_data) <- validstates
 
+# datevector for the full data 
+# this is not needed to be constructed since all_Death_data already has a date column 
+#datevector = seq(as.Date("2020/01/22"), as.Date("2020/01/22") + nrow(all_death_data) - 1, "day")
+datevector = as.Date(all_death_data$date)
+
+
 all_test_data = fread("Test.csv")
 names(all_test_data) <- validstates
+# add a date column as well for filtering purposes. 
+all_test_data = all_test_data %>% mutate(date = datevector, .before=1)
 
 # for test data: flip as its in descending order and remove the date column
 # all_test_data = all_test_data %>% mutate(sortk = seq(nrow(all_test_data), 1)) %>% arrange(sortk)
 # all_test_data[, sortk := NULL]
 ur_case_data = fread("./meanINC.csv")
 names(ur_case_data) <- validstates
+ur_case_data = ur_case_data %>% mutate(date = datevector, .before=1)
 # ur_case_data = as.data.table(lapply(ur_case_data, cumsum)) # turn columns into cumulative
 
 # get the hospital data... since this is raw data from covid tracking (and not processed by Seyed)
@@ -74,12 +83,31 @@ names(ur_case_data) <- validstates
 # and also remove the date column 
 all_hosp_data = fread("hosp_data.csv")
 all_hosp_data = all_hosp_data %>%  mutate(date = as.Date(date, "%Y-%m-%d"))
-all_hosp_data = all_hosp_data %>%  arrange(date)  %>% select(-!!c("date"))
+all_hosp_data = all_hosp_data %>%  arrange(date)  # %>% select(-!!c("date"))
 # check if the order of states match, although this is is important since we select by column name and not index
-names(all_hosp_data) == validstates
+names(all_hosp_data[,2:52]) == validstates
+
+
+# now, filter the data based on the date. 
+# discussions have lead to deciding if we will report only first wave or the entire epidemic. 
+# therefore we will run the model with data from january to may 31 
+# and then may 31 onwards... the idea is that underreporting from may 31 onwards is going to be negligible
+
+all_death_data = all_death_data %>% filter(date <= as.Date("2020-05-31"))
+all_test_data = all_test_data %>% filter(date <= as.Date("2020-05-31"))
+ur_case_data = ur_case_data %>% filter(date <= as.Date("2020-05-31"))
+all_hosp_data = all_hosp_data %>% filter(date <= as.Date("2020-05-31"))
+
+# all_death_data = all_death_data %>% filter(date >= as.Date("2020-05-31") - 2)
+# all_test_data = all_test_data %>% filter(date >= as.Date("2020-05-31") - 2)
+# ur_case_data = ur_case_data %>% filter(date >= as.Date("2020-05-31") - 2)
+# all_hosp_data = all_hosp_data %>% filter(date >= as.Date("2020-05-31") - 2)
 
 # create a date vector corresponding to the rows. 
-datevector = seq(as.Date("2020/01/22"), as.Date("2020/01/22") + nrow(ur_case_data) - 1, "day")
+#datevector = seq(as.Date("2020/01/22"), as.Date("2020/01/22") + nrow(all_death_data) - 1, "day")
+datevector = as.Date(all_death_data$date)
+
+
 
 ## define global functions
 fitlmn <- function(dat, qu_val){
@@ -103,29 +131,6 @@ fitlmn <- function(dat, qu_val){
   return(fit1)
 }
 
-# deprecated, remove for next check in
-fitlmn_nyc_calibration <- function(dat, qu_val){
-  # qgam paper: Statistical distribution fitting to the number of COVID-19 deaths in South Africa
-  # follows the code samples from that paper -- can be optimized and cleaned up
-  adma3 = data.table(t = 1:length(dat), De_New = dat)
-  
-  # take 100 rows for training, the rest as test. 
-  De_data_test <- 50:nrow(adma3) 
-  data_train <- adma3[-De_data_test, ] 
-  data_test <- adma3[De_data_test, ]
-  set.seed(2356)
-  
-  ## bs = "ps"
-  tun <- tuneLearnFast(form=De_New~s(t,bs="ad"), err = 0.1, qu = qu_val, data = data_train) 
-  fit1 <- qgam(De_New~s(t,bs="ad"), err = 0.1, qu = qu_val, lsig = tun$lsig, data = adma3) 
-  
-  #summary(fit1, se="ker")
-  plot(adma3$De_New, xlab="Day, t", ylab="Reported deaths in SA", col="blue", type="b")
-  lines(fit1$fit, col="red")
-  return(fit1)
-}
-
-
 ## function to get state specific vectors
 get_state_data_vectors <- function(st, ma=F){
   ## get the data data, and remove the zeros
@@ -135,23 +140,18 @@ get_state_data_vectors <- function(st, ma=F){
   
   cdd = all_death_data[, get(cdeath_name)]
   add = all_death_data[, get(adeath_name)]
-  #ddd = all_death_data[, get(st)]
-  
   urc = ur_case_data[, get(st)]
   tst = all_test_data[, get(st)]
   hos = all_hosp_data[, get(st)]
+  # test if all the lengths are same
   alllen = lengths(list(cdd, add, urc, tst, hos))
   stopifnot(length(unique(alllen)) == 1)
   
   # some states have NA for missng hospital data near October 3 - 9th. 
   # this could be because states havn't updated their data as of this analysis 
   # we will in a few manual NAs by looking at the trend of hospitalization
-  if(st == "MN"){
-    hos[256:257] = (hos[255] + hos[258])/2
-  }
-  if(st == "MO"){
-    hos[258:260] = (hos[257] + hos[261])/2
-  }
+  # DELETED CODE dec 6... covid tracker has fixed this data... no need to do it manually 
+  
   
   # we add one to test data for WA for model stability since there is division 
   # in one of the covariates, and covid tracker returns 0. 
@@ -163,13 +163,23 @@ get_state_data_vectors <- function(st, ma=F){
   # this happeend on June 30th 
   # we eventually add this back in the totals in the manuscript/appendix
   # remember that the table that is generated will have this number missing so add it in
+  # december 6 addition: added logic check to see if data exists all the way to june 30 (i.e. split before/after first wave)
   if(st == "NY"){
     ny_ano = which(datevector == "2020-06-30")
-    print(qq("NY spike @{cdd[ny_ano]}"))
-    add[ny_ano] = cdd[ny_ano]
+    if (length(ny_ano) > 0){
+      print(qq("NY spike fixed to count: @{cdd[ny_ano]}"))
+      add[ny_ano] = cdd[ny_ano]
+    }
   }
   
+  # first point of data 
   firstnonzero = min( which ( add != 0 ))
+  if (firstnonzero ==  1){
+    firstnonzero = 3  # take two away for the moving average. 
+    # this was added december 6 to splot the data before/after first wave 
+    # ofcourse the start of the data on the second wave is positive 
+    # so we select two extra days (see the loading code) so that moving average ends up being the same
+  }
   fnd = datevector[firstnonzero]
   lastelement = length(add)
  
@@ -179,17 +189,18 @@ get_state_data_vectors <- function(st, ma=F){
     urc_rm = rollmean(urc[(firstnonzero-2) : lastelement], 3)
     tst_rm = rollmean(tst[(firstnonzero-2) : lastelement], 3)
     hos_rm = rollmean(hos[(firstnonzero-2) : lastelement], 3)
+    alllen = lengths(list(all_death_rm, cnf_death_rm, urc_rm, tst_rm, hos_rm))
   } else {
     all_death_rm = add[firstnonzero : lastelement]
     cnf_death_rm = cdd[firstnonzero : lastelement]
     urc_rm = urc[firstnonzero : lastelement]
     tst_rm = tst[firstnonzero : lastelement]
     hos_rm = hos[firstnonzero : lastelement]
+    alllen = lengths(list(all_death_rm, cnf_death_rm, urc_rm, tst_rm, hos_rm))
   }
   # TX and GA have two NAs at start of data, replace with their 3rd index
   if(st == "TX" || st == "GA")
     tst_rm[is.na(tst_rm)] = tst_rm[3]
-  
 
   return(list(firstnonzero_date=fnd, alldeath=all_death_rm, cnfdeath=cnf_death_rm, urcases=urc_rm, tstdata=tst_rm, hospdata=hos_rm))
 }
@@ -282,7 +293,7 @@ st_norm_deaths <- st_norm_deaths %>% mutate(redblue_diff = abs(bzval - logdeaths
 # we need to adjust the logdeaths values to calibrate the model
 # the model should be calibrated so that NY gives the reported underreporting ~30%
 # NY correction factor: 1.7, rest 1.3
-cfac = 2.0*(1.88 + 1.7)
+cfac = 2.0*(1.88 + 2.0)
 st_norm_deaths <- st_norm_deaths %>% mutate(newbz = cfac - logdeaths)
 
 # have to manually adjust PA as the logdeaths produces a very nonrealistic number
@@ -326,8 +337,8 @@ lmod_code = nimbleCode({
 # get command line argument for state
 args = commandArgs(trailingOnly=TRUE)
 arg_st = validstates[as.numeric(args[1])]
-#arg_st = "GA" 
-WRITE_DATA = T # write data files at the end
+arg_st = "NY" 
+WRITE_DATA = F # write data files at the end
 print(qq("Working with state: @{arg_st}"))
 
 bzvalue = st_norm_deaths %>% filter(states == arg_st) %>% select(newbz) %>% .$newbz
@@ -345,17 +356,6 @@ hospdata = get_state_data_vectors(arg_st, ma=T)$hospdata
 hospdata = fill_hospital_data(hospdata, alldeathdata) 
 
 firstnonzero_date = get_state_data_vectors(arg_st, ma=F)$firstnonzero_date
-
-## calibration process to NYC
-# nyc_end_date = as.numeric(as.Date("2020-05-02") - firstnonzero_date)
-# deathdata = deathdata[1:nyc_end_date]
-# deathdata_ma = deathdata_ma[1:nyc_end_date]
-# urcases = urcases[1:nyc_end_date]
-# tstdata = tstdata[1:nyc_end_date]
-# hospdata = hospdata[1:nyc_end_date]
-
-#poly_tim = fitlmn_nyc_calibration(deathdata_ma, 0.5)$fitted.values
-#poly_tim[poly_tim < 0] = 1e-5 # for model stability
 
 #fit the data (fit to rolling avg to smooth out, seyed's idea)
 poly_tim = fitlmn(alldeathdata_ma, 0.5)$fitted.values
@@ -490,10 +490,8 @@ gg = gg + geom_line(aes(x=1:xvals, y=mns1), color="#e41a1c", size=1.2)
 gg = gg + geom_line(aes(x=1:xvals, y=mns2), color="#377eb8", size=1.2)
 gg = gg + geom_line(aes(x=1:xvals, y=poly_tim), color="#4daf4a", size=1.2, alpha=0.8)
 gg = gg + annotate("text", -Inf, Inf, label = c_Str, hjust = 0, vjust = 1)
-gg = gg + xlab("time") + ylab("deaths")
+gg = gg + xlab("time") + ylab("deaths") + theme_bw()
 gg
-
-
 
 # loopvals = c("0.5", "0.6", "0.7", "0.8", "0.9", "1.0", "1.1", "1.2", "1.3", "1.4", "1.5")
 # loopvals = c("1.6", "1.7", "1.8", "1.9", "2.0", "2.1", "2.2", "2.3", "2.4", "2.5")
